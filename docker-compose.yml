@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  beer-label-editor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    container_name: beer-label-editor
+
+# Pour lancer:
+# docker-compose up -d --build
+#
+# Pour voir les logs:
+# docker-compose logs -f
+#
+# Pour arrêter:
+# docker-compose down
