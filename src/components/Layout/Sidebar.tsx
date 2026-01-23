@@ -49,27 +49,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ children }) => {
   ];
 
   return (
-    <aside className="w-80 bg-gray-800 border-r border-gray-700 flex flex-col h-full">
+    <aside className="w-80 bg-gray-800 border-r border-gray-700 flex flex-col min-h-0">
       {/* Tabs */}
       <div className="flex border-b border-gray-700">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 px-4 py-3 flex items-center justify-center gap-2 transition-colors ${
+            title={tab.label}
+            className={`flex-1 px-2 py-3 flex flex-col items-center justify-center gap-1 transition-colors ${
               activeTab === tab.id
                 ? 'bg-gray-700 text-amber-400 border-b-2 border-amber-400'
                 : 'text-gray-400 hover:text-white hover:bg-gray-750'
             }`}
           >
             {tab.icon}
-            <span className="text-sm font-medium">{tab.label}</span>
+            <span className="text-xs font-medium">{tab.label}</span>
           </button>
         ))}
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 min-h-0">
         {React.Children.map(children, (child) => {
           if (React.isValidElement(child) && child.props['data-tab'] === activeTab) {
             return child;

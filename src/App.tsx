@@ -24,6 +24,18 @@ function App() {
   const [isTemplateGalleryOpen, setIsTemplateGalleryOpen] = useState(false);
   const [isMultiExportOpen, setIsMultiExportOpen] = useState(false);
 
+  // Image style props type
+  type ImageStyleProps = {
+    opacity?: number;
+    brightness?: number;
+    contrast?: number;
+    saturation?: number;
+    blur?: number;
+    grayscale?: boolean;
+    sepia?: boolean;
+    invert?: boolean;
+  };
+
   // Canvas action refs
   const canvasActionsRef = React.useRef<{
     addText: (content: string, fieldType: string) => void;
@@ -32,6 +44,7 @@ function App() {
     addCircle: (color: string, strokeColor: string) => void;
     addLine: (color: string) => void;
     updateStyle: (style: Partial<ElementStyle>) => void;
+    updateImageStyle: (props: ImageStyleProps) => void;
     deleteSelected: () => void;
     duplicateSelected: () => Promise<fabric.FabricObject | undefined>;
     undo: () => void;
@@ -89,6 +102,12 @@ function App() {
   const handleStyleChange = useCallback((style: Partial<ElementStyle>) => {
     if (canvasActionsRef.current) {
       canvasActionsRef.current.updateStyle(style);
+    }
+  }, []);
+
+  const handleImageStyleChange = useCallback((props: ImageStyleProps) => {
+    if (canvasActionsRef.current) {
+      canvasActionsRef.current.updateImageStyle(props);
     }
   }, []);
 
@@ -226,7 +245,9 @@ function App() {
           <div data-tab="style">
             <StylePanel
               selectedElement={selectedElement}
+              selectedFabricObject={selectedFabricObject}
               onStyleChange={handleStyleChange}
+              onImageStyleChange={handleImageStyleChange}
               onDeleteElement={handleDeleteSelected}
             />
           </div>

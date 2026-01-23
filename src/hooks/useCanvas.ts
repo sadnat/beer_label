@@ -368,6 +368,82 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     saveHistory();
   }, [selectedObject, saveHistory]);
 
+  // Update image style (opacity and filters)
+  const updateImageStyle = useCallback((props: {
+    opacity?: number;
+    brightness?: number;
+    contrast?: number;
+    saturation?: number;
+    blur?: number;
+    grayscale?: boolean;
+    sepia?: boolean;
+    invert?: boolean;
+  }) => {
+    if (!fabricRef.current || !selectedObject) return;
+    if (!(selectedObject instanceof fabric.FabricImage)) return;
+
+    const img = selectedObject as fabric.FabricImage;
+
+    // Update opacity
+    if (props.opacity !== undefined) {
+      img.set({ opacity: props.opacity });
+    }
+
+    // Build filters array
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const filters: any[] = [];
+
+    // Get current filter values from image or use defaults
+    const currentFilters = (img as fabric.FabricImage & { filterValues?: Record<string, number | boolean> }).filterValues || {};
+
+    const brightness = props.brightness !== undefined ? props.brightness : (currentFilters.brightness as number ?? 0);
+    const contrast = props.contrast !== undefined ? props.contrast : (currentFilters.contrast as number ?? 0);
+    const saturation = props.saturation !== undefined ? props.saturation : (currentFilters.saturation as number ?? 0);
+    const blur = props.blur !== undefined ? props.blur : (currentFilters.blur as number ?? 0);
+    const grayscale = props.grayscale !== undefined ? props.grayscale : (currentFilters.grayscale as boolean ?? false);
+    const sepia = props.sepia !== undefined ? props.sepia : (currentFilters.sepia as boolean ?? false);
+    const invert = props.invert !== undefined ? props.invert : (currentFilters.invert as boolean ?? false);
+
+    // Store filter values on image for later retrieval
+    (img as fabric.FabricImage & { filterValues?: Record<string, number | boolean> }).filterValues = {
+      brightness,
+      contrast,
+      saturation,
+      blur,
+      grayscale,
+      sepia,
+      invert,
+    };
+
+    // Add filters based on values
+    if (brightness !== 0) {
+      filters.push(new fabric.filters.Brightness({ brightness }));
+    }
+    if (contrast !== 0) {
+      filters.push(new fabric.filters.Contrast({ contrast }));
+    }
+    if (saturation !== 0) {
+      filters.push(new fabric.filters.Saturation({ saturation }));
+    }
+    if (blur > 0) {
+      filters.push(new fabric.filters.Blur({ blur }));
+    }
+    if (grayscale) {
+      filters.push(new fabric.filters.Grayscale());
+    }
+    if (sepia) {
+      filters.push(new fabric.filters.Sepia());
+    }
+    if (invert) {
+      filters.push(new fabric.filters.Invert());
+    }
+
+    img.filters = filters;
+    img.applyFilters();
+    fabricRef.current.renderAll();
+    saveHistory();
+  }, [selectedObject, saveHistory]);
+
   // Delete selected object
   const deleteSelected = useCallback(() => {
     if (!fabricRef.current || !selectedObject) return;
@@ -451,28 +527,19 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     });
   }, []);
 
-  // Zoom controls
+  // Zoom controls - CSS-based zoom (doesn't modify Fabric.js objects)
   const zoomIn = useCallback(() => {
-    if (!fabricRef.current) return;
     const newZoom = Math.min(zoom * 1.2, 4);
     setZoom(newZoom);
-    fabricRef.current.setZoom(newZoom);
-    fabricRef.current.renderAll();
   }, [zoom]);
 
   const zoomOut = useCallback(() => {
-    if (!fabricRef.current) return;
     const newZoom = Math.max(zoom / 1.2, 0.25);
     setZoom(newZoom);
-    fabricRef.current.setZoom(newZoom);
-    fabricRef.current.renderAll();
   }, [zoom]);
 
   const resetZoom = useCallback(() => {
-    if (!fabricRef.current) return;
     setZoom(1);
-    fabricRef.current.setZoom(1);
-    fabricRef.current.renderAll();
   }, []);
 
   // Clear canvas
@@ -483,10 +550,78 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     fabricRef.current.renderAll();
   }, []);
 
-  // Load from JSON
+  // Load from JSON with scaling to fit current canvas size
   const loadFromJSON = useCallback(async (json: string) => {
     if (!fabricRef.current) return;
-    await fabricRef.current.loadFromJSON(json);
+
+    // Original template dimensions (90mm x 120mm at scale ~3.78)
+    const TEMPLATE_ORIGINAL_WIDTH = 340;
+    const TEMPLATE_ORIGINAL_HEIGHT = 452;
+
+    // Current canvas dimensions
+    const canvasWidth = fabricRef.current.getWidth();
+    const canvasHeight = fabricRef.current.getHeight();
+
+    // Calculate scale ratios
+    const scaleX = canvasWidth / TEMPLATE_ORIGINAL_WIDTH;
+    const scaleY = canvasHeight / TEMPLATE_ORIGINAL_HEIGHT;
+    const scaleFactor = Math.min(scaleX, scaleY);
+
+    // Parse and transform JSON
+    const data = JSON.parse(json);
+
+    if (data.objects && Array.isArray(data.objects)) {
+      data.objects = data.objects.map((obj: Record<string, unknown>) => {
+        const transformed = { ...obj };
+
+        // Scale position
+        if (typeof transformed.left === 'number') {
+          transformed.left = (transformed.left / TEMPLATE_ORIGINAL_WIDTH) * canvasWidth;
+        }
+        if (typeof transformed.top === 'number') {
+          transformed.top = (transformed.top / TEMPLATE_ORIGINAL_HEIGHT) * canvasHeight;
+        }
+
+        // Scale dimensions
+        if (typeof transformed.width === 'number') {
+          transformed.width = transformed.width * scaleFactor;
+        }
+        if (typeof transformed.height === 'number') {
+          transformed.height = transformed.height * scaleFactor;
+        }
+        if (typeof transformed.radius === 'number') {
+          transformed.radius = transformed.radius * scaleFactor;
+        }
+
+        // Scale font size
+        if (typeof transformed.fontSize === 'number') {
+          transformed.fontSize = transformed.fontSize * scaleFactor;
+        }
+
+        // Scale stroke width
+        if (typeof transformed.strokeWidth === 'number') {
+          transformed.strokeWidth = transformed.strokeWidth * scaleFactor;
+        }
+
+        // Scale line coordinates
+        if (typeof transformed.x1 === 'number') {
+          transformed.x1 = transformed.x1 * scaleFactor;
+        }
+        if (typeof transformed.x2 === 'number') {
+          transformed.x2 = transformed.x2 * scaleFactor;
+        }
+        if (typeof transformed.y1 === 'number') {
+          transformed.y1 = transformed.y1 * scaleFactor;
+        }
+        if (typeof transformed.y2 === 'number') {
+          transformed.y2 = transformed.y2 * scaleFactor;
+        }
+
+        return transformed;
+      });
+    }
+
+    await fabricRef.current.loadFromJSON(JSON.stringify(data));
     fabricRef.current.renderAll();
     saveHistory();
     notifyObjectsChange();
@@ -512,6 +647,7 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     addImage,
     updateSelectedStyle,
     updateShapeStyle,
+    updateImageStyle,
     deleteSelected,
     duplicateSelected,
     bringToFront,

@@ -1,19 +1,81 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import * as fabric from 'fabric';
 import { LabelElement, ElementStyle } from '../../types/label';
 import { GOOGLE_FONTS } from '../../constants/defaultStyles';
 
+interface ImageStyleProps {
+  opacity?: number;
+  brightness?: number;
+  contrast?: number;
+  saturation?: number;
+  blur?: number;
+  grayscale?: boolean;
+  sepia?: boolean;
+  invert?: boolean;
+}
+
+const DEFAULT_IMAGE_VALUES: ImageStyleProps = {
+  opacity: 1,
+  brightness: 0,
+  contrast: 0,
+  saturation: 0,
+  blur: 0,
+  grayscale: false,
+  sepia: false,
+  invert: false,
+};
+
 interface StylePanelProps {
   selectedElement: LabelElement | null;
+  selectedFabricObject?: fabric.FabricObject | null;
   onStyleChange: (style: Partial<ElementStyle>) => void;
+  onImageStyleChange?: (props: ImageStyleProps) => void;
   onDeleteElement: () => void;
 }
 
 export const StylePanel: React.FC<StylePanelProps> = ({
   selectedElement,
+  selectedFabricObject,
   onStyleChange,
+  onImageStyleChange,
   onDeleteElement,
 }) => {
-  if (!selectedElement) {
+  // Check if selected object is an image
+  const isImage = selectedFabricObject instanceof fabric.FabricImage;
+
+  // Local state for image values to ensure UI updates
+  const [imageValues, setImageValues] = useState<ImageStyleProps>(DEFAULT_IMAGE_VALUES);
+
+  // Sync local state with Fabric object when selection changes
+  useEffect(() => {
+    if (isImage && selectedFabricObject) {
+      const img = selectedFabricObject as fabric.FabricImage & { filterValues?: Record<string, number | boolean> };
+      const filterValues = img.filterValues || {};
+      setImageValues({
+        opacity: img.opacity ?? 1,
+        brightness: (filterValues.brightness as number) ?? 0,
+        contrast: (filterValues.contrast as number) ?? 0,
+        saturation: (filterValues.saturation as number) ?? 0,
+        blur: (filterValues.blur as number) ?? 0,
+        grayscale: (filterValues.grayscale as boolean) ?? false,
+        sepia: (filterValues.sepia as boolean) ?? false,
+        invert: (filterValues.invert as boolean) ?? false,
+      });
+    } else {
+      setImageValues(DEFAULT_IMAGE_VALUES);
+    }
+  }, [selectedFabricObject, isImage]);
+
+  // Handle image style change - update local state and call parent handler
+  const handleImageStyleChange = (props: ImageStyleProps) => {
+    const newValues = { ...imageValues, ...props };
+    setImageValues(newValues);
+    if (onImageStyleChange) {
+      onImageStyleChange(props);
+    }
+  };
+
+  if (!selectedElement && !isImage) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-gray-400">
         <svg className="w-16 h-16 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -27,7 +89,16 @@ export const StylePanel: React.FC<StylePanelProps> = ({
     );
   }
 
-  const isText = selectedElement.type === 'text';
+  const isText = selectedElement?.type === 'text';
+
+  // Get element name for display
+  const getElementName = () => {
+    if (isImage) {
+      const img = selectedFabricObject as fabric.FabricObject & { elementName?: string };
+      return img.elementName || 'Image';
+    }
+    return isText ? 'Texte' : 'Élément';
+  };
 
   return (
     <div className="space-y-6">
@@ -36,10 +107,10 @@ export const StylePanel: React.FC<StylePanelProps> = ({
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-white">
-              {isText ? 'Texte' : 'Image'}
+              {getElementName()}
             </p>
             <p className="text-xs text-gray-400 truncate max-w-[180px]">
-              {selectedElement.content || 'Sans contenu'}
+              {selectedElement?.content || (isImage ? 'Image' : 'Sans contenu')}
             </p>
           </div>
           <button
@@ -65,9 +136,20 @@ export const StylePanel: React.FC<StylePanelProps> = ({
               value={selectedElement.style.fontFamily}
               onChange={(e) => onStyleChange({ fontFamily: e.target.value })}
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+              style={{ fontFamily: selectedElement.style.fontFamily }}
             >
-              {GOOGLE_FONTS.map((font) => (
-                <option key={font.value} value={font.value}>
+              {GOOGLE_FONTS.map((font, index) => (
+                <option
+                  key={font.value || `separator-${index}`}
+                  value={font.value}
+                  disabled={font.disabled}
+                  style={{
+                    fontFamily: font.disabled ? 'inherit' : font.value,
+                    fontWeight: font.disabled ? 'bold' : 'normal',
+                    backgroundColor: font.disabled ? '#374151' : 'inherit',
+                    color: font.disabled ? '#9ca3af' : 'inherit',
+                  }}
+                >
                   {font.name}
                 </option>
               ))}
@@ -262,6 +344,176 @@ export const StylePanel: React.FC<StylePanelProps> = ({
                 </div>
               </div>
             </div>
+          </section>
+        </>
+      )}
+
+      {/* Image Controls */}
+      {isImage && (
+        <>
+          {/* Opacity */}
+          <section>
+            <h3 className="text-sm font-semibold text-amber-400 mb-3 uppercase tracking-wide">
+              Opacité
+            </h3>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                value={imageValues.opacity}
+                onChange={(e) => handleImageStyleChange({ opacity: parseFloat(e.target.value) })}
+                min={0}
+                max={1}
+                step={0.05}
+                className="flex-1 accent-amber-500"
+              />
+              <span className="w-12 text-center text-sm text-gray-300">
+                {Math.round((imageValues.opacity ?? 1) * 100)}%
+              </span>
+            </div>
+          </section>
+
+          {/* Brightness & Contrast */}
+          <section>
+            <h3 className="text-sm font-semibold text-amber-400 mb-3 uppercase tracking-wide">
+              Luminosité & Contraste
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Luminosité</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    value={imageValues.brightness}
+                    onChange={(e) => handleImageStyleChange({ brightness: parseFloat(e.target.value) })}
+                    min={-1}
+                    max={1}
+                    step={0.05}
+                    className="flex-1 accent-amber-500"
+                  />
+                  <span className="w-12 text-center text-sm text-gray-300">
+                    {Math.round((imageValues.brightness ?? 0) * 100)}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Contraste</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    value={imageValues.contrast}
+                    onChange={(e) => handleImageStyleChange({ contrast: parseFloat(e.target.value) })}
+                    min={-1}
+                    max={1}
+                    step={0.05}
+                    className="flex-1 accent-amber-500"
+                  />
+                  <span className="w-12 text-center text-sm text-gray-300">
+                    {Math.round((imageValues.contrast ?? 0) * 100)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Saturation & Blur */}
+          <section>
+            <h3 className="text-sm font-semibold text-amber-400 mb-3 uppercase tracking-wide">
+              Saturation & Flou
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Saturation</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    value={imageValues.saturation}
+                    onChange={(e) => handleImageStyleChange({ saturation: parseFloat(e.target.value) })}
+                    min={-1}
+                    max={1}
+                    step={0.05}
+                    className="flex-1 accent-amber-500"
+                  />
+                  <span className="w-12 text-center text-sm text-gray-300">
+                    {Math.round((imageValues.saturation ?? 0) * 100)}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Flou</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    value={imageValues.blur}
+                    onChange={(e) => handleImageStyleChange({ blur: parseFloat(e.target.value) })}
+                    min={0}
+                    max={1}
+                    step={0.02}
+                    className="flex-1 accent-amber-500"
+                  />
+                  <span className="w-12 text-center text-sm text-gray-300">
+                    {Math.round((imageValues.blur ?? 0) * 100)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Filter Effects */}
+          <section>
+            <h3 className="text-sm font-semibold text-amber-400 mb-3 uppercase tracking-wide">
+              Effets
+            </h3>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => handleImageStyleChange({ grayscale: !imageValues.grayscale })}
+                className={`px-3 py-2 rounded-md text-sm transition-colors ${
+                  imageValues.grayscale
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                N&B
+              </button>
+              <button
+                onClick={() => handleImageStyleChange({ sepia: !imageValues.sepia })}
+                className={`px-3 py-2 rounded-md text-sm transition-colors ${
+                  imageValues.sepia
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                Sépia
+              </button>
+              <button
+                onClick={() => handleImageStyleChange({ invert: !imageValues.invert })}
+                className={`px-3 py-2 rounded-md text-sm transition-colors ${
+                  imageValues.invert
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                Inverser
+              </button>
+            </div>
+          </section>
+
+          {/* Reset Filters */}
+          <section>
+            <button
+              onClick={() => handleImageStyleChange({
+                opacity: 1,
+                brightness: 0,
+                contrast: 0,
+                saturation: 0,
+                blur: 0,
+                grayscale: false,
+                sepia: false,
+                invert: false,
+              })}
+              className="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-md transition-colors text-sm"
+            >
+              Réinitialiser les filtres
+            </button>
           </section>
         </>
       )}

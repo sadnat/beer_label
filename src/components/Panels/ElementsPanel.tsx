@@ -101,38 +101,31 @@ export const ElementsPanel: React.FC<ElementsPanelProps> = ({
             onChange={(v) => onBeerDataChange('beerStyle', v)}
             onAdd={() => handleAddField('beerStyle')}
           />
-          <div className="grid grid-cols-2 gap-2">
-            <NumberInputField
-              label="Alcool (%)"
+          <div className="grid grid-cols-4 gap-1">
+            <CompactNumberField
+              label="Alc.%"
               value={beerData.alcoholDegree}
               onChange={(v) => onBeerDataChange('alcoholDegree', v)}
               onAdd={() => handleAddField('alcoholDegree')}
               step={0.1}
-              min={0}
-              max={100}
             />
-            <NumberInputField
-              label="Volume"
+            <CompactNumberField
+              label="Vol."
               value={beerData.volume}
               onChange={(v) => onBeerDataChange('volume', v)}
               onAdd={() => handleAddField('volume')}
-              min={0}
             />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <NumberInputField
+            <CompactNumberField
               label="EBC"
               value={beerData.ebc}
               onChange={(v) => onBeerDataChange('ebc', v)}
               onAdd={() => handleAddField('ebc')}
-              min={0}
             />
-            <NumberInputField
+            <CompactNumberField
               label="IBU"
               value={beerData.ibu}
               onChange={(v) => onBeerDataChange('ibu', v)}
               onAdd={() => handleAddField('ibu')}
-              min={0}
             />
           </div>
           <TextAreaField
@@ -309,40 +302,35 @@ const InputField: React.FC<InputFieldProps> = ({ label, value, onChange, onAdd }
   </div>
 );
 
-interface NumberInputFieldProps {
+// Compact number field for small values (Alcohol, Volume, EBC, IBU)
+interface CompactNumberFieldProps {
   label: string;
   value: number;
   onChange: (value: number) => void;
   onAdd: () => void;
   step?: number;
-  min?: number;
-  max?: number;
 }
 
-const NumberInputField: React.FC<NumberInputFieldProps> = ({
+const CompactNumberField: React.FC<CompactNumberFieldProps> = ({
   label,
   value,
   onChange,
   onAdd,
   step = 1,
-  min,
-  max,
 }) => (
   <div>
-    <label className="block text-xs text-gray-400 mb-1">{label}</label>
-    <div className="flex gap-1">
+    <label className="block text-[10px] text-gray-400 mb-0.5 truncate">{label}</label>
+    <div className="flex flex-col gap-0.5">
       <input
         type="number"
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
         step={step}
-        min={min}
-        max={max}
-        className="flex-1 px-2 py-2 bg-gray-700 border border-gray-600 rounded-md text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+        className="w-full px-1 py-1 bg-gray-700 border border-gray-600 rounded text-white text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 text-center"
       />
       <button
         onClick={onAdd}
-        className="px-2 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-md transition-colors text-sm"
+        className="w-full py-0.5 bg-gray-600 hover:bg-gray-500 text-white rounded transition-colors text-[10px]"
         title="Ajouter au canvas"
       >
         +

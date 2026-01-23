@@ -15,6 +15,16 @@ interface CanvasEditorProps {
     addCircle: (color: string, strokeColor: string) => void;
     addLine: (color: string) => void;
     updateStyle: (style: Partial<ElementStyle>) => void;
+    updateImageStyle: (props: {
+      opacity?: number;
+      brightness?: number;
+      contrast?: number;
+      saturation?: number;
+      blur?: number;
+      grayscale?: boolean;
+      sepia?: boolean;
+      invert?: boolean;
+    }) => void;
     deleteSelected: () => void;
     duplicateSelected: () => Promise<fabric.FabricObject | undefined>;
     undo: () => void;
@@ -77,6 +87,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
     addLine,
     addImage,
     updateSelectedStyle,
+    updateImageStyle,
     deleteSelected,
     duplicateSelected,
     undo,
@@ -121,6 +132,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
       addCircle,
       addLine,
       updateStyle: updateSelectedStyle,
+      updateImageStyle,
       deleteSelected,
       duplicateSelected,
       undo,
@@ -136,7 +148,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
       loadFromJSON,
       clearCanvas,
     };
-  }, [addText, addImage, addRectangle, addCircle, addLine, updateSelectedStyle, deleteSelected, duplicateSelected, undo, redo, bringForward, sendBackward, bringToFront, sendToBack, selectObject, getObjects, toDataURL, toJSON, loadFromJSON, clearCanvas, actionsRef]);
+  }, [addText, addImage, addRectangle, addCircle, addLine, updateSelectedStyle, updateImageStyle, deleteSelected, duplicateSelected, undo, redo, bringForward, sendBackward, bringToFront, sendToBack, selectObject, getObjects, toDataURL, toJSON, loadFromJSON, clearCanvas, actionsRef]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -249,6 +261,9 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
           className="shadow-2xl"
           style={{
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            transform: `scale(${zoom})`,
+            transformOrigin: 'center center',
+            transition: 'transform 0.1s ease-out',
           }}
         >
           <canvas ref={canvasRef} />
