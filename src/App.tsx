@@ -23,6 +23,7 @@ function App() {
   const [selectedFabricObject, setSelectedFabricObject] = useState<fabric.FabricObject | null>(null);
   const [isTemplateGalleryOpen, setIsTemplateGalleryOpen] = useState(false);
   const [isMultiExportOpen, setIsMultiExportOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Image style props type
   type ImageStyleProps = {
@@ -73,19 +74,39 @@ function App() {
   }, [projectName, format, beerData]);
 
   const handleExport = useCallback(() => {
-    if (!canvasActionsRef.current) return;
+    if (!canvasActionsRef.current || isExporting) return;
 
-    const dataUrl = canvasActionsRef.current.toDataURL(3);
+    setIsExporting(true);
+    const startTime = Date.now();
 
-    const pdf = new jsPDF({
-      orientation: format.width > format.height ? 'landscape' : 'portrait',
-      unit: 'mm',
-      format: [format.width, format.height],
-    });
+    // Use setTimeout to allow React to render the loading state before heavy work
+    setTimeout(() => {
+      try {
+        const dataUrl = canvasActionsRef.current!.toDataURL(3);
 
-    pdf.addImage(dataUrl, 'PNG', 0, 0, format.width, format.height);
-    pdf.save(`${projectName.replace(/\s+/g, '_')}.pdf`);
-  }, [format, projectName]);
+        const pdf = new jsPDF({
+          orientation: format.width > format.height ? 'landscape' : 'portrait',
+          unit: 'mm',
+          format: [format.width, format.height],
+        });
+
+        pdf.addImage(dataUrl, 'PNG', 0, 0, format.width, format.height);
+        pdf.save(`${projectName.replace(/\s+/g, '_')}.pdf`);
+      } catch (error) {
+        console.error('Export failed:', error);
+        alert('Erreur lors de l\'export. Veuillez réessayer.');
+      } finally {
+        // Ensure loading state is visible for at least 500ms
+        const elapsed = Date.now() - startTime;
+        const minDisplayTime = 500;
+        if (elapsed < minDisplayTime) {
+          setTimeout(() => setIsExporting(false), minDisplayTime - elapsed);
+        } else {
+          setIsExporting(false);
+        }
+      }
+    }, 100);
+  }, [format, projectName, isExporting]);
 
   const handleAddElement = useCallback((fieldType: string, content: string) => {
     if (canvasActionsRef.current) {
@@ -208,6 +229,7 @@ function App() {
         onExport={handleExport}
         onOpenTemplates={() => setIsTemplateGalleryOpen(true)}
         onOpenMultiExport={() => setIsMultiExportOpen(true)}
+        isExporting={isExporting}
       />
 
       <div className="flex flex-1 overflow-hidden">

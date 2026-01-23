@@ -39,57 +39,61 @@ export const MultiLabelExport: React.FC<MultiLabelExportProps> = ({
   // Scale for preview (fit in container)
   const previewScale = Math.min(400 / pageWidth, 500 / pageHeight);
 
-  const handleExport = async () => {
+  const handleExport = () => {
+    if (isExporting) return;
     setIsExporting(true);
 
-    try {
-      // Get canvas image at high resolution
-      const dataUrl = getCanvasDataURL(4); // Higher multiplier for quality
+    // Use setTimeout to allow React to render the loading state before heavy work
+    setTimeout(() => {
+      try {
+        // Get canvas image at high resolution
+        const dataUrl = getCanvasDataURL(4); // Higher multiplier for quality
 
-      // Create PDF
-      const pdf = new jsPDF({
-        orientation: layout.orientation,
-        unit: 'mm',
-        format: 'a4',
-      });
-
-      // Add cut marks if enabled
-      if (showCutMarks) {
-        pdf.setDrawColor(200, 200, 200);
-        pdf.setLineWidth(0.1);
-
-        positions.forEach(pos => {
-          // Top-left corner
-          pdf.line(pos.x - 3, pos.y, pos.x - 1, pos.y);
-          pdf.line(pos.x, pos.y - 3, pos.x, pos.y - 1);
-
-          // Top-right corner
-          pdf.line(pos.x + format.width + 1, pos.y, pos.x + format.width + 3, pos.y);
-          pdf.line(pos.x + format.width, pos.y - 3, pos.x + format.width, pos.y - 1);
-
-          // Bottom-left corner
-          pdf.line(pos.x - 3, pos.y + format.height, pos.x - 1, pos.y + format.height);
-          pdf.line(pos.x, pos.y + format.height + 1, pos.x, pos.y + format.height + 3);
-
-          // Bottom-right corner
-          pdf.line(pos.x + format.width + 1, pos.y + format.height, pos.x + format.width + 3, pos.y + format.height);
-          pdf.line(pos.x + format.width, pos.y + format.height + 1, pos.x + format.width, pos.y + format.height + 3);
+        // Create PDF
+        const pdf = new jsPDF({
+          orientation: layout.orientation,
+          unit: 'mm',
+          format: 'a4',
         });
+
+        // Add cut marks if enabled
+        if (showCutMarks) {
+          pdf.setDrawColor(200, 200, 200);
+          pdf.setLineWidth(0.1);
+
+          positions.forEach(pos => {
+            // Top-left corner
+            pdf.line(pos.x - 3, pos.y, pos.x - 1, pos.y);
+            pdf.line(pos.x, pos.y - 3, pos.x, pos.y - 1);
+
+            // Top-right corner
+            pdf.line(pos.x + format.width + 1, pos.y, pos.x + format.width + 3, pos.y);
+            pdf.line(pos.x + format.width, pos.y - 3, pos.x + format.width, pos.y - 1);
+
+            // Bottom-left corner
+            pdf.line(pos.x - 3, pos.y + format.height, pos.x - 1, pos.y + format.height);
+            pdf.line(pos.x, pos.y + format.height + 1, pos.x, pos.y + format.height + 3);
+
+            // Bottom-right corner
+            pdf.line(pos.x + format.width + 1, pos.y + format.height, pos.x + format.width + 3, pos.y + format.height);
+            pdf.line(pos.x + format.width, pos.y + format.height + 1, pos.x + format.width, pos.y + format.height + 3);
+          });
+        }
+
+        // Add labels
+        positions.forEach(pos => {
+          pdf.addImage(dataUrl, 'PNG', pos.x, pos.y, format.width, format.height);
+        });
+
+        // Save the PDF
+        pdf.save(`etiquettes_${format.name.replace(/\s+/g, '_')}_x${layout.totalLabels}.pdf`);
+      } catch (error) {
+        console.error('Export failed:', error);
+        alert('Erreur lors de l\'export. Veuillez reessayer.');
+      } finally {
+        setIsExporting(false);
       }
-
-      // Add labels
-      positions.forEach(pos => {
-        pdf.addImage(dataUrl, 'PNG', pos.x, pos.y, format.width, format.height);
-      });
-
-      // Save the PDF
-      pdf.save(`etiquettes_${format.name.replace(/\s+/g, '_')}_x${layout.totalLabels}.pdf`);
-    } catch (error) {
-      console.error('Export failed:', error);
-      alert('Erreur lors de l\'export. Veuillez reessayer.');
-    }
-
-    setIsExporting(false);
+    }, 50);
   };
 
   if (!isOpen) return null;
