@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import * as fabric from 'fabric';
-import { LabelElement, ElementStyle } from '../../types/label';
+import { LabelElement, ElementStyle, ShadowStyle } from '../../types/label';
 import { GOOGLE_FONTS } from '../../constants/defaultStyles';
 
 interface ImageStyleProps {
@@ -46,25 +46,110 @@ export const StylePanel: React.FC<StylePanelProps> = ({
   // Local state for image values to ensure UI updates
   const [imageValues, setImageValues] = useState<ImageStyleProps>(DEFAULT_IMAGE_VALUES);
 
-  // Sync local state with Fabric object when selection changes
+  // Local state for text style values to ensure smooth UI updates
+  const [textStyle, setTextStyle] = useState({
+    fontFamily: 'Roboto',
+    fontSize: 14,
+    fontWeight: 'normal' as 'normal' | 'bold',
+    fontStyle: 'normal' as 'normal' | 'italic',
+    textDecoration: 'none' as 'none' | 'underline',
+    color: '#000000',
+    lineHeight: 1.2,
+    letterSpacing: 0,
+  });
+
+  // Local state for shadow values to ensure smooth slider animations
+  const [shadowEnabled, setShadowEnabled] = useState(false);
+  const [shadowValues, setShadowValues] = useState<ShadowStyle>({
+    color: '#000000',
+    blur: 4,
+    offsetX: 2,
+    offsetY: 2,
+  });
+
+  // Track previous element ID to only sync when selection changes
+  const prevElementIdRef = useRef<string | null>(null);
+
+  // Sync text style and shadow state only when a NEW element is selected
   useEffect(() => {
-    if (isImage && selectedFabricObject) {
-      const img = selectedFabricObject as fabric.FabricImage & { filterValues?: Record<string, number | boolean> };
-      const filterValues = img.filterValues || {};
-      setImageValues({
-        opacity: img.opacity ?? 1,
-        brightness: (filterValues.brightness as number) ?? 0,
-        contrast: (filterValues.contrast as number) ?? 0,
-        saturation: (filterValues.saturation as number) ?? 0,
-        blur: (filterValues.blur as number) ?? 0,
-        grayscale: (filterValues.grayscale as boolean) ?? false,
-        sepia: (filterValues.sepia as boolean) ?? false,
-        invert: (filterValues.invert as boolean) ?? false,
-      });
-    } else {
-      setImageValues(DEFAULT_IMAGE_VALUES);
+    const currentId = selectedElement?.id ?? null;
+    if (currentId !== prevElementIdRef.current) {
+      prevElementIdRef.current = currentId;
+
+      // Sync text styles
+      if (selectedElement?.style) {
+        setTextStyle({
+          fontFamily: selectedElement.style.fontFamily,
+          fontSize: selectedElement.style.fontSize,
+          fontWeight: selectedElement.style.fontWeight,
+          fontStyle: selectedElement.style.fontStyle,
+          textDecoration: selectedElement.style.textDecoration,
+          color: selectedElement.style.color,
+          lineHeight: selectedElement.style.lineHeight,
+          letterSpacing: selectedElement.style.letterSpacing,
+        });
+      }
+
+      // Sync shadow
+      if (selectedElement?.style.shadow) {
+        setShadowEnabled(true);
+        setShadowValues(selectedElement.style.shadow);
+      } else {
+        setShadowEnabled(false);
+        setShadowValues({ color: '#000000', blur: 4, offsetX: 2, offsetY: 2 });
+      }
+    }
+  }, [selectedElement]);
+
+  // Handle text style change - update local state and call parent handler
+  const handleTextStyleChange = (updates: Partial<typeof textStyle>) => {
+    setTextStyle(prev => ({ ...prev, ...updates }));
+    onStyleChange(updates);
+  };
+
+  // Track previous Fabric object to only sync when selection changes
+  const prevFabricObjectRef = useRef<fabric.FabricObject | null>(null);
+
+  // Sync local state with Fabric object only when a NEW object is selected
+  useEffect(() => {
+    if (selectedFabricObject !== prevFabricObjectRef.current) {
+      prevFabricObjectRef.current = selectedFabricObject ?? null;
+      if (isImage && selectedFabricObject) {
+        const img = selectedFabricObject as fabric.FabricImage & { filterValues?: Record<string, number | boolean> };
+        const filterValues = img.filterValues || {};
+        setImageValues({
+          opacity: img.opacity ?? 1,
+          brightness: (filterValues.brightness as number) ?? 0,
+          contrast: (filterValues.contrast as number) ?? 0,
+          saturation: (filterValues.saturation as number) ?? 0,
+          blur: (filterValues.blur as number) ?? 0,
+          grayscale: (filterValues.grayscale as boolean) ?? false,
+          sepia: (filterValues.sepia as boolean) ?? false,
+          invert: (filterValues.invert as boolean) ?? false,
+        });
+      } else {
+        setImageValues(DEFAULT_IMAGE_VALUES);
+      }
     }
   }, [selectedFabricObject, isImage]);
+
+  // Handle shadow style change - update local state and call parent handler
+  const handleShadowChange = (updates: Partial<ShadowStyle>) => {
+    const newValues = { ...shadowValues, ...updates };
+    setShadowValues(newValues);
+    onStyleChange({ shadow: newValues });
+  };
+
+  // Toggle shadow on/off
+  const toggleShadow = () => {
+    if (shadowEnabled) {
+      setShadowEnabled(false);
+      onStyleChange({ shadow: undefined });
+    } else {
+      setShadowEnabled(true);
+      onStyleChange({ shadow: shadowValues });
+    }
+  };
 
   // Handle image style change - update local state and call parent handler
   const handleImageStyleChange = (props: ImageStyleProps) => {
@@ -133,10 +218,10 @@ export const StylePanel: React.FC<StylePanelProps> = ({
               Police
             </h3>
             <select
-              value={selectedElement.style.fontFamily}
-              onChange={(e) => onStyleChange({ fontFamily: e.target.value })}
+              value={textStyle.fontFamily}
+              onChange={(e) => handleTextStyleChange({ fontFamily: e.target.value })}
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-              style={{ fontFamily: selectedElement.style.fontFamily }}
+              style={{ fontFamily: textStyle.fontFamily }}
             >
               {GOOGLE_FONTS.map((font, index) => (
                 <option
@@ -164,16 +249,16 @@ export const StylePanel: React.FC<StylePanelProps> = ({
             <div className="flex items-center gap-3">
               <input
                 type="range"
-                value={selectedElement.style.fontSize}
-                onChange={(e) => onStyleChange({ fontSize: parseInt(e.target.value) })}
+                value={textStyle.fontSize}
+                onChange={(e) => handleTextStyleChange({ fontSize: parseInt(e.target.value) })}
                 min={6}
                 max={72}
                 className="flex-1 accent-amber-500"
               />
               <input
                 type="number"
-                value={selectedElement.style.fontSize}
-                onChange={(e) => onStyleChange({ fontSize: parseInt(e.target.value) || 12 })}
+                value={textStyle.fontSize}
+                onChange={(e) => handleTextStyleChange({ fontSize: parseInt(e.target.value) || 12 })}
                 min={6}
                 max={200}
                 className="w-16 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-center focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -188,11 +273,11 @@ export const StylePanel: React.FC<StylePanelProps> = ({
             </h3>
             <div className="flex gap-2">
               <button
-                onClick={() => onStyleChange({
-                  fontWeight: selectedElement.style.fontWeight === 'bold' ? 'normal' : 'bold'
+                onClick={() => handleTextStyleChange({
+                  fontWeight: textStyle.fontWeight === 'bold' ? 'normal' : 'bold'
                 })}
                 className={`flex-1 px-3 py-2 rounded-md transition-colors font-bold ${
-                  selectedElement.style.fontWeight === 'bold'
+                  textStyle.fontWeight === 'bold'
                     ? 'bg-amber-600 text-white'
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 }`}
@@ -200,11 +285,11 @@ export const StylePanel: React.FC<StylePanelProps> = ({
                 B
               </button>
               <button
-                onClick={() => onStyleChange({
-                  fontStyle: selectedElement.style.fontStyle === 'italic' ? 'normal' : 'italic'
+                onClick={() => handleTextStyleChange({
+                  fontStyle: textStyle.fontStyle === 'italic' ? 'normal' : 'italic'
                 })}
                 className={`flex-1 px-3 py-2 rounded-md transition-colors italic ${
-                  selectedElement.style.fontStyle === 'italic'
+                  textStyle.fontStyle === 'italic'
                     ? 'bg-amber-600 text-white'
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 }`}
@@ -212,61 +297,16 @@ export const StylePanel: React.FC<StylePanelProps> = ({
                 I
               </button>
               <button
-                onClick={() => onStyleChange({
-                  textDecoration: selectedElement.style.textDecoration === 'underline' ? 'none' : 'underline'
+                onClick={() => handleTextStyleChange({
+                  textDecoration: textStyle.textDecoration === 'underline' ? 'none' : 'underline'
                 })}
                 className={`flex-1 px-3 py-2 rounded-md transition-colors underline ${
-                  selectedElement.style.textDecoration === 'underline'
+                  textStyle.textDecoration === 'underline'
                     ? 'bg-amber-600 text-white'
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 }`}
               >
                 U
-              </button>
-            </div>
-          </section>
-
-          {/* Text Alignment */}
-          <section>
-            <h3 className="text-sm font-semibold text-amber-400 mb-3 uppercase tracking-wide">
-              Alignement
-            </h3>
-            <div className="flex gap-2">
-              <button
-                onClick={() => onStyleChange({ textAlign: 'left' })}
-                className={`flex-1 px-3 py-2 rounded-md transition-colors ${
-                  selectedElement.style.textAlign === 'left'
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
-              >
-                <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h10M4 18h14" />
-                </svg>
-              </button>
-              <button
-                onClick={() => onStyleChange({ textAlign: 'center' })}
-                className={`flex-1 px-3 py-2 rounded-md transition-colors ${
-                  selectedElement.style.textAlign === 'center'
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
-              >
-                <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M7 12h10M5 18h14" />
-                </svg>
-              </button>
-              <button
-                onClick={() => onStyleChange({ textAlign: 'right' })}
-                className={`flex-1 px-3 py-2 rounded-md transition-colors ${
-                  selectedElement.style.textAlign === 'right'
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
-              >
-                <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M10 12h10M6 18h14" />
-                </svg>
               </button>
             </div>
           </section>
@@ -279,14 +319,14 @@ export const StylePanel: React.FC<StylePanelProps> = ({
             <div className="flex items-center gap-3">
               <input
                 type="color"
-                value={selectedElement.style.color}
-                onChange={(e) => onStyleChange({ color: e.target.value })}
+                value={textStyle.color}
+                onChange={(e) => handleTextStyleChange({ color: e.target.value })}
                 className="w-10 h-10 rounded cursor-pointer border-0"
               />
               <input
                 type="text"
-                value={selectedElement.style.color}
-                onChange={(e) => onStyleChange({ color: e.target.value })}
+                value={textStyle.color}
+                onChange={(e) => handleTextStyleChange({ color: e.target.value })}
                 className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-amber-500 uppercase"
               />
             </div>
@@ -295,7 +335,7 @@ export const StylePanel: React.FC<StylePanelProps> = ({
               {['#000000', '#ffffff', '#d4af37', '#8b4513', '#228b22', '#1e3a5f'].map((color) => (
                 <button
                   key={color}
-                  onClick={() => onStyleChange({ color })}
+                  onClick={() => handleTextStyleChange({ color })}
                   className="w-8 h-8 rounded border-2 border-gray-600 hover:border-amber-500 transition-colors"
                   style={{ backgroundColor: color }}
                   title={color}
@@ -315,15 +355,15 @@ export const StylePanel: React.FC<StylePanelProps> = ({
                 <div className="flex items-center gap-3">
                   <input
                     type="range"
-                    value={selectedElement.style.lineHeight}
-                    onChange={(e) => onStyleChange({ lineHeight: parseFloat(e.target.value) })}
+                    value={textStyle.lineHeight}
+                    onChange={(e) => handleTextStyleChange({ lineHeight: parseFloat(e.target.value) })}
                     min={0.8}
                     max={3}
                     step={0.1}
                     className="flex-1 accent-amber-500"
                   />
                   <span className="w-12 text-center text-sm text-gray-300">
-                    {selectedElement.style.lineHeight.toFixed(1)}
+                    {textStyle.lineHeight.toFixed(1)}
                   </span>
                 </div>
               </div>
@@ -332,17 +372,123 @@ export const StylePanel: React.FC<StylePanelProps> = ({
                 <div className="flex items-center gap-3">
                   <input
                     type="range"
-                    value={selectedElement.style.letterSpacing}
-                    onChange={(e) => onStyleChange({ letterSpacing: parseInt(e.target.value) })}
+                    value={textStyle.letterSpacing}
+                    onChange={(e) => handleTextStyleChange({ letterSpacing: parseInt(e.target.value) })}
                     min={-5}
                     max={20}
                     className="flex-1 accent-amber-500"
                   />
                   <span className="w-12 text-center text-sm text-gray-300">
-                    {selectedElement.style.letterSpacing}px
+                    {textStyle.letterSpacing}px
                   </span>
                 </div>
               </div>
+            </div>
+          </section>
+
+          {/* Shadow */}
+          <section>
+            <h3 className="text-sm font-semibold text-amber-400 mb-3 uppercase tracking-wide">
+              Ombre
+            </h3>
+            <div className="space-y-3">
+              {/* Toggle shadow */}
+              <div className="flex items-center justify-between">
+                <label className="text-sm text-gray-300">Activer l'ombre</label>
+                <button
+                  onClick={toggleShadow}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    shadowEnabled ? 'bg-amber-600' : 'bg-gray-600'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      shadowEnabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {shadowEnabled && (
+                <>
+                  {/* Shadow color */}
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Couleur</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={shadowValues.color.startsWith('rgba') ? '#000000' : shadowValues.color}
+                        onChange={(e) => handleShadowChange({ color: e.target.value })}
+                        className="w-8 h-8 rounded cursor-pointer border-0"
+                      />
+                      <div className="flex gap-1">
+                        {['#000000', '#333333', '#666666', '#d4af37'].map((color) => (
+                          <button
+                            key={color}
+                            onClick={() => handleShadowChange({ color })}
+                            className="w-6 h-6 rounded border border-gray-600 hover:border-amber-500 transition-colors"
+                            style={{ backgroundColor: color }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Blur */}
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Flou</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        value={shadowValues.blur}
+                        onChange={(e) => handleShadowChange({ blur: parseInt(e.target.value) })}
+                        min={0}
+                        max={20}
+                        className="flex-1 accent-amber-500"
+                      />
+                      <span className="w-12 text-center text-sm text-gray-300">
+                        {shadowValues.blur}px
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Offset X */}
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Décalage X</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        value={shadowValues.offsetX}
+                        onChange={(e) => handleShadowChange({ offsetX: parseInt(e.target.value) })}
+                        min={-20}
+                        max={20}
+                        className="flex-1 accent-amber-500"
+                      />
+                      <span className="w-12 text-center text-sm text-gray-300">
+                        {shadowValues.offsetX}px
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Offset Y */}
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Décalage Y</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        value={shadowValues.offsetY}
+                        onChange={(e) => handleShadowChange({ offsetY: parseInt(e.target.value) })}
+                        min={-20}
+                        max={20}
+                        className="flex-1 accent-amber-500"
+                      />
+                      <span className="w-12 text-center text-sm text-gray-300">
+                        {shadowValues.offsetY}px
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </section>
         </>

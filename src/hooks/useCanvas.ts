@@ -347,6 +347,20 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     if (style.lineHeight !== undefined) updates.lineHeight = style.lineHeight;
     if (style.letterSpacing !== undefined) updates.charSpacing = style.letterSpacing * 10;
 
+    // Handle shadow
+    if (style.shadow !== undefined) {
+      if (style.shadow) {
+        updates.shadow = new fabric.Shadow({
+          color: style.shadow.color,
+          blur: style.shadow.blur,
+          offsetX: style.shadow.offsetX,
+          offsetY: style.shadow.offsetY,
+        });
+      } else {
+        updates.shadow = undefined;
+      }
+    }
+
     selectedObject.set(updates);
     fabricRef.current.renderAll();
     saveHistory();
@@ -692,6 +706,12 @@ function fabricObjectToElement(obj: fabric.FabricObject): LabelElement {
       textAlign: ((obj as fabric.IText).textAlign || 'left') as 'left' | 'center' | 'right',
       lineHeight: (obj as fabric.IText).lineHeight || 1.2,
       letterSpacing: ((obj as fabric.IText).charSpacing || 0) / 10,
+      shadow: (obj as fabric.IText).shadow ? {
+        color: ((obj as fabric.IText).shadow as fabric.Shadow).color || 'rgba(0,0,0,0.5)',
+        blur: ((obj as fabric.IText).shadow as fabric.Shadow).blur || 0,
+        offsetX: ((obj as fabric.IText).shadow as fabric.Shadow).offsetX || 0,
+        offsetY: ((obj as fabric.IText).shadow as fabric.Shadow).offsetY || 0,
+      } : undefined,
     } : DEFAULT_ELEMENT_STYLE,
   };
 }
