@@ -37,6 +37,8 @@ services:
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-}
       APP_URL: ${APP_URL:-http://localhost}
+      # Admin Configuration
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
     networks:
       - beer_label_internal
     restart: unless-stopped

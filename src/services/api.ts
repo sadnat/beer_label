@@ -152,13 +152,113 @@ class ApiClient {
       method: 'DELETE',
     });
   }
+
+  // Admin endpoints
+  async getAdminStats() {
+    return this.request<{ stats: AdminStats }>('/admin/stats');
+  }
+
+  async getAdminUsers(
+    page: number = 1,
+    limit: number = 20,
+    search: string = '',
+    filters: { role?: string; is_banned?: boolean; plan?: string } = {}
+  ) {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+    });
+    if (search) params.append('search', search);
+    if (filters.role) params.append('role', filters.role);
+    if (filters.is_banned !== undefined) params.append('is_banned', filters.is_banned.toString());
+    if (filters.plan) params.append('plan', filters.plan);
+
+    return this.request<{ users: AdminUser[]; total: number; pages: number }>(
+      `/admin/users?${params.toString()}`
+    );
+  }
+
+  async getAdminUserDetails(id: string) {
+    return this.request<{ user: AdminUserDetails }>(`/admin/users/${id}`);
+  }
+
+  async changeUserRole(id: string, role: 'admin' | 'user') {
+    return this.request<{ message: string }>(`/admin/users/${id}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    });
+  }
+
+  async banUser(id: string, reason?: string) {
+    return this.request<{ message: string }>(`/admin/users/${id}/ban`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  async unbanUser(id: string) {
+    return this.request<{ message: string }>(`/admin/users/${id}/ban`, {
+      method: 'DELETE',
+    });
+  }
+
+  async deleteUserAsAdmin(id: string) {
+    return this.request<{ message: string }>(`/admin/users/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async changeUserPlan(userId: string, planId: string) {
+    return this.request<{ message: string }>(`/admin/users/${userId}/plan`, {
+      method: 'PUT',
+      body: JSON.stringify({ planId }),
+    });
+  }
+
+  async getAdminPlans() {
+    return this.request<{ plans: Plan[] }>('/admin/plans');
+  }
+
+  async createPlan(data: Omit<Plan, 'id' | 'created_at' | 'is_active'>) {
+    return this.request<{ plan: Plan }>('/admin/plans', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updatePlan(id: string, data: Partial<Omit<Plan, 'id' | 'slug' | 'created_at'>>) {
+    return this.request<{ plan: Plan }>(`/admin/plans/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getAuditLog(
+    page: number = 1,
+    limit: number = 50,
+    filters: { action?: string; adminId?: string } = {}
+  ) {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+    });
+    if (filters.action) params.append('action', filters.action);
+    if (filters.adminId) params.append('adminId', filters.adminId);
+
+    return this.request<{ entries: AuditLogEntry[]; total: number; pages: number }>(
+      `/admin/audit-log?${params.toString()}`
+    );
+  }
 }
 
 // Types
+export type UserRole = 'admin' | 'user';
+
 export interface User {
   id: string;
   email: string;
   email_verified?: boolean;
+  role?: UserRole;
   created_at?: string;
 }
 
@@ -197,6 +297,74 @@ export interface ProjectUpdate {
   canvas_json?: string;
   beer_data?: Record<string, unknown>;
   thumbnail?: string;
+}
+
+// Admin types
+export interface AdminStats {
+  totalUsers: number;
+  activeUsers: number;
+  bannedUsers: number;
+  totalProjects: number;
+  usersByPlan: { plan: string; count: number }[];
+  recentSignups: { date: string; count: number }[];
+  projectsCreatedThisMonth: number;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  email_verified: boolean;
+  role: UserRole;
+  is_banned: boolean;
+  ban_reason: string | null;
+  banned_at: string | null;
+  created_at: string;
+  updated_at: string;
+  projects_count: number;
+  plan_name: string | null;
+}
+
+export interface AdminUserDetails extends AdminUser {
+  projects: {
+    id: string;
+    name: string;
+    format_id: string;
+    created_at: string;
+    updated_at: string;
+  }[];
+  subscription: {
+    id: string;
+    plan_id: string;
+    plan_name: string;
+    status: string;
+    current_period_start: string;
+    current_period_end: string | null;
+  } | null;
+}
+
+export interface Plan {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  price_monthly: number;
+  max_projects: number;
+  max_exports_per_month: number;
+  features: string[];
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  admin_id: string;
+  admin_email: string;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  details: Record<string, unknown> | null;
+  ip_address: string | null;
+  created_at: string;
 }
 
 // Export singleton instance

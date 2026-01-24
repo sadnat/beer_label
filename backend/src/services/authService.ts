@@ -3,6 +3,7 @@ import jwt, { SignOptions } from 'jsonwebtoken';
 import crypto from 'crypto';
 import { query } from '../config/database';
 import { sendVerificationEmail, sendPasswordResetEmail, isEmailConfigured } from './emailService';
+import { UserRole } from '../middleware/auth';
 
 const SALT_ROUNDS = 12;
 
@@ -11,6 +12,10 @@ export interface User {
   email: string;
   password_hash: string;
   email_verified: boolean;
+  role: UserRole;
+  is_banned: boolean;
+  ban_reason: string | null;
+  banned_at: Date | null;
   verification_token: string | null;
   verification_token_expires: Date | null;
   password_reset_token: string | null;
@@ -23,6 +28,7 @@ export interface UserPublic {
   id: string;
   email: string;
   email_verified: boolean;
+  role: UserRole;
   created_at: Date;
 }
 
@@ -37,7 +43,7 @@ export const comparePassword = async (
   return bcrypt.compare(password, hash);
 };
 
-export const generateToken = (userId: string, email: string): string => {
+export const generateToken = (userId: string, email: string, role: UserRole): string => {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
     throw new Error('JWT_SECRET is not defined');
@@ -47,11 +53,18 @@ export const generateToken = (userId: string, email: string): string => {
     expiresIn: '7d',
   };
 
-  return jwt.sign({ userId, email }, secret, options);
+  return jwt.sign({ userId, email, role }, secret, options);
 };
 
 export const generateVerificationToken = (): string => {
   return crypto.randomBytes(32).toString('hex');
+};
+
+// Check if email should be auto-promoted to admin
+const shouldBeAdmin = (email: string): boolean => {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (!adminEmail) return false;
+  return email.toLowerCase() === adminEmail.toLowerCase();
 };
 
 export const createUser = async (
@@ -65,11 +78,14 @@ export const createUser = async (
   // If email is not configured, set email as verified immediately
   const emailVerified = !isEmailConfigured();
 
+  // Check if this email should be auto-promoted to admin
+  const role: UserRole = shouldBeAdmin(email) ? 'admin' : 'user';
+
   const result = await query(
-    `INSERT INTO users (email, password_hash, email_verified, verification_token, verification_token_expires)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING id, email, email_verified, created_at`,
-    [email.toLowerCase(), passwordHash, emailVerified, emailVerified ? null : verificationToken, emailVerified ? null : verificationExpires]
+    `INSERT INTO users (email, password_hash, email_verified, role, verification_token, verification_token_expires)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id, email, email_verified, role, created_at`,
+    [email.toLowerCase(), passwordHash, emailVerified, role, emailVerified ? null : verificationToken, emailVerified ? null : verificationExpires]
   );
 
   const user = result.rows[0];
@@ -88,7 +104,7 @@ export const verifyEmail = async (token: string): Promise<UserPublic | null> => 
     `UPDATE users
      SET email_verified = TRUE, verification_token = NULL, verification_token_expires = NULL
      WHERE verification_token = $1 AND verification_token_expires > NOW()
-     RETURNING id, email, email_verified, created_at`,
+     RETURNING id, email, email_verified, role, created_at`,
     [token]
   );
 
@@ -155,7 +171,7 @@ export const findUserByEmail = async (email: string): Promise<User | null> => {
 
 export const findUserById = async (id: string): Promise<UserPublic | null> => {
   const result = await query(
-    'SELECT id, email, email_verified, created_at FROM users WHERE id = $1',
+    'SELECT id, email, email_verified, role, created_at FROM users WHERE id = $1',
     [id]
   );
 
@@ -203,4 +219,50 @@ export const changePassword = async (
   );
 
   return { success: true };
+};
+
+// Login helper that checks ban status and returns role
+export const validateLogin = async (
+  email: string,
+  password: string
+): Promise<{ success: boolean; user?: UserPublic; error?: string; requiresVerification?: boolean }> => {
+  const user = await findUserByEmail(email);
+
+  if (!user) {
+    return { success: false, error: 'Email ou mot de passe incorrect' };
+  }
+
+  // Check if banned
+  if (user.is_banned) {
+    return {
+      success: false,
+      error: user.ban_reason || 'Votre compte a été suspendu.',
+    };
+  }
+
+  // Verify password
+  const isValid = await comparePassword(password, user.password_hash);
+  if (!isValid) {
+    return { success: false, error: 'Email ou mot de passe incorrect' };
+  }
+
+  // Check email verification
+  if (!user.email_verified) {
+    return {
+      success: false,
+      requiresVerification: true,
+      error: 'Veuillez vérifier votre email avant de vous connecter.',
+    };
+  }
+
+  return {
+    success: true,
+    user: {
+      id: user.id,
+      email: user.email,
+      email_verified: user.email_verified,
+      role: user.role,
+      created_at: user.created_at,
+    },
+  };
 };

@@ -68,16 +68,22 @@ main.tsx                       # Router setup, AuthProvider
 ├── RegisterPage               # User registration
 ├── VerifyEmailPage            # Email verification handler
 ├── DashboardPage              # Project list (protected)
-└── EditorPage                 # Label editor (protected)
-    ├── Header                 # Top navigation + save/export
-    ├── Sidebar                # Tabbed panel container
-    │   ├── ElementsPanel      # Add beer fields, text, images, shapes
-    │   ├── LayersPanel        # Object z-order management
-    │   ├── FormatPanel        # Label format selection
-    │   └── StylePanel         # Text/image styling controls
-    ├── CanvasEditor           # Fabric.js canvas wrapper + toolbar
-    ├── TemplateGallery        # Template browser modal
-    └── MultiLabelExport       # A4 sheet printing modal
+├── EditorPage                 # Label editor (protected)
+│   ├── Header                 # Top navigation + save/export
+│   ├── Sidebar                # Tabbed panel container
+│   │   ├── ElementsPanel      # Add beer fields, text, images, shapes
+│   │   ├── LayersPanel        # Object z-order management
+│   │   ├── FormatPanel        # Label format selection
+│   │   └── StylePanel         # Text/image styling controls
+│   ├── CanvasEditor           # Fabric.js canvas wrapper + toolbar
+│   ├── TemplateGallery        # Template browser modal
+│   └── MultiLabelExport       # A4 sheet printing modal
+└── admin/                     # Admin panel (role=admin required)
+    ├── AdminLayout            # Admin sidebar + header wrapper
+    ├── AdminDashboard         # Statistics and overview
+    ├── AdminUsers             # User management table
+    ├── AdminPlans             # Subscription plans management
+    └── AdminAudit             # Audit log viewer
 ```
 
 ### Backend Structure
@@ -89,20 +95,24 @@ backend/
 │   ├── config/
 │   │   └── database.ts       # PostgreSQL connection pool
 │   ├── middleware/
-│   │   └── auth.ts           # JWT authentication middleware
+│   │   └── auth.ts           # JWT auth + role middleware
 │   ├── routes/
 │   │   ├── auth.ts           # /api/auth/* routes
-│   │   └── projects.ts       # /api/projects/* routes
+│   │   ├── projects.ts       # /api/projects/* routes
+│   │   └── admin.ts          # /api/admin/* routes (admin only)
 │   ├── controllers/
 │   │   ├── authController.ts # Auth request handlers
-│   │   └── projectController.ts
+│   │   ├── projectController.ts
+│   │   └── adminController.ts # Admin operations
 │   └── services/
 │       ├── authService.ts    # User/JWT operations
 │       ├── emailService.ts   # Nodemailer SMTP
-│       └── projectService.ts # Project CRUD
+│       ├── projectService.ts # Project CRUD
+│       └── adminService.ts   # Admin stats, user mgmt
 ├── migrations/
 │   ├── 001_initial_schema.sql
-│   └── 002_email_verification.sql
+│   ├── 002_email_verification.sql
+│   └── 003_admin_system.sql  # Roles, plans, subscriptions
 ├── package.json
 ├── tsconfig.json
 └── Dockerfile
@@ -126,6 +136,10 @@ users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     email_verified BOOLEAN DEFAULT FALSE,
+    role VARCHAR(20) DEFAULT 'user',    -- 'user' or 'admin'
+    is_banned BOOLEAN DEFAULT FALSE,
+    ban_reason TEXT,
+    banned_at TIMESTAMP,
     verification_token VARCHAR(255),
     verification_token_expires TIMESTAMP,
     password_reset_token VARCHAR(255),
@@ -147,6 +161,44 @@ projects (
     thumbnail TEXT,
     created_at TIMESTAMP,
     updated_at TIMESTAMP
+)
+
+-- Subscription plans
+plans (
+    id UUID PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    slug VARCHAR(50) UNIQUE NOT NULL,
+    description TEXT,
+    price_monthly DECIMAL(10,2) DEFAULT 0,
+    max_projects INT DEFAULT 5,
+    max_exports_per_month INT DEFAULT 10,
+    features JSONB DEFAULT '[]',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP
+)
+
+-- User subscriptions
+subscriptions (
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    plan_id UUID REFERENCES plans(id),
+    status VARCHAR(20) DEFAULT 'active',
+    current_period_start TIMESTAMP,
+    current_period_end TIMESTAMP,
+    created_at TIMESTAMP,
+    UNIQUE(user_id)
+)
+
+-- Admin audit log
+audit_log (
+    id UUID PRIMARY KEY,
+    admin_id UUID REFERENCES users(id),
+    action VARCHAR(100) NOT NULL,
+    target_type VARCHAR(50),
+    target_id UUID,
+    details JSONB,
+    ip_address VARCHAR(45),
+    created_at TIMESTAMP
 )
 ```
 
@@ -173,6 +225,22 @@ projects (
 | POST   | /        | Create project       |
 | PUT    | /:id     | Update project       |
 | DELETE | /:id     | Delete project       |
+
+**Admin (`/api/admin/`)** - Requires admin role
+| Method | Endpoint         | Description                    |
+|--------|------------------|--------------------------------|
+| GET    | /stats           | Global statistics              |
+| GET    | /users           | List users (paginated)         |
+| GET    | /users/:id       | User details + projects        |
+| PUT    | /users/:id/role  | Change user role               |
+| POST   | /users/:id/ban   | Ban user                       |
+| DELETE | /users/:id/ban   | Unban user                     |
+| DELETE | /users/:id       | Delete user account            |
+| PUT    | /users/:id/plan  | Change user subscription plan  |
+| GET    | /plans           | List subscription plans        |
+| POST   | /plans           | Create plan                    |
+| PUT    | /plans/:id       | Update plan                    |
+| GET    | /audit-log       | Admin action history           |
 
 ### State Flow
 
@@ -218,9 +286,54 @@ SMTP_FROM=Beer Label Editor <noreply@example.com>
 
 # Application URL (for email links)
 APP_URL=https://your-domain.com
+
+# Admin Configuration
+ADMIN_EMAIL=your-admin@example.com
 ```
 
-**Note:** If SMTP is not configured, users are automatically verified on registration.
+**Notes:**
+- If SMTP is not configured, users are automatically verified on registration.
+- The user registering with `ADMIN_EMAIL` will automatically get admin role.
+- For existing users, promote to admin with: `UPDATE users SET role = 'admin' WHERE email = 'your@email.com';`
+
+## Admin Panel
+
+### Accessing Admin
+
+1. **For existing users**, promote to admin via SQL:
+   ```bash
+   docker compose exec postgres psql -U beer_label -d beer_label_db -c "UPDATE users SET role = 'admin' WHERE email = 'your@email.com';"
+   ```
+
+2. **For new registrations**, set `ADMIN_EMAIL` in `.env` before registering.
+
+3. Once logged in as admin, an "Admin" button appears in the dashboard header.
+
+### Admin Features
+
+| Route | Feature | Description |
+|-------|---------|-------------|
+| `/admin` | Dashboard | Global stats: users, projects, signups chart, users by plan |
+| `/admin/users` | User Management | List, search, filter, ban/unban, change role/plan, delete |
+| `/admin/plans` | Plan Management | View/edit subscription plans (Free, Pro, Business) |
+| `/admin/audit` | Audit Log | History of all admin actions with details |
+
+### Default Plans
+
+| Plan | Price | Max Projects | Max Exports/Month |
+|------|-------|--------------|-------------------|
+| Gratuit | 0€ | 3 | 5 |
+| Pro | 9.99€ | 20 | 50 |
+| Business | 29.99€ | Unlimited | Unlimited |
+
+### User Roles
+
+- `user` - Standard user, can create projects and use the editor
+- `admin` - Full access to admin panel, can manage users and plans
+
+### Ban System
+
+Banned users cannot log in. Ban reason is stored and shown to the user on login attempt. Admins cannot ban other admins or themselves.
 
 ## Tech Stack
 

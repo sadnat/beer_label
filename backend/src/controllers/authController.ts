@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import { validationResult } from 'express-validator';
 import * as authService from '../services/authService';
-import { isEmailConfigured } from '../services/emailService';
 import { AuthRequest } from '../middleware/auth';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
@@ -24,8 +23,8 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     // Create user
     const { user, verificationSent } = await authService.createUser(email, password);
 
-    // Generate token
-    const token = authService.generateToken(user.id, user.email);
+    // Generate token with role
+    const token = authService.generateToken(user.id, user.email, user.role);
 
     // Response based on whether email verification is required
     if (user.email_verified) {
@@ -35,6 +34,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
           id: user.id,
           email: user.email,
           email_verified: user.email_verified,
+          role: user.role,
         },
         token,
         message: 'Compte créé avec succès',
@@ -46,6 +46,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
           id: user.id,
           email: user.email,
           email_verified: user.email_verified,
+          role: user.role,
         },
         // No token - user must verify email first
         message: verificationSent
@@ -70,41 +71,33 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   const { email, password } = req.body;
 
   try {
-    // Find user
-    const user = await authService.findUserByEmail(email);
-    if (!user) {
-      res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+    // Use validateLogin which checks ban status, password, and email verification
+    const result = await authService.validateLogin(email, password);
+
+    if (!result.success) {
+      if (result.requiresVerification) {
+        res.status(403).json({
+          error: result.error,
+          requiresVerification: true,
+          email: email,
+        });
+      } else {
+        res.status(401).json({ error: result.error });
+      }
       return;
     }
 
-    // Verify password
-    const isValidPassword = await authService.comparePassword(
-      password,
-      user.password_hash
-    );
-    if (!isValidPassword) {
-      res.status(401).json({ error: 'Email ou mot de passe incorrect' });
-      return;
-    }
+    const user = result.user!;
 
-    // Check if email is verified (only if SMTP is configured)
-    if (isEmailConfigured() && !user.email_verified) {
-      res.status(403).json({
-        error: 'Veuillez vérifier votre email avant de vous connecter',
-        requiresVerification: true,
-        email: user.email,
-      });
-      return;
-    }
-
-    // Generate token
-    const token = authService.generateToken(user.id, user.email);
+    // Generate token with role
+    const token = authService.generateToken(user.id, user.email, user.role);
 
     res.json({
       user: {
         id: user.id,
         email: user.email,
         email_verified: user.email_verified,
+        role: user.role,
       },
       token,
     });
@@ -162,6 +155,7 @@ export const verifyEmail = async (req: Request, res: Response): Promise<void> =>
         id: user.id,
         email: user.email,
         email_verified: user.email_verified,
+        role: user.role,
       },
     });
   } catch (error) {
