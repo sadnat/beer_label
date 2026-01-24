@@ -11,6 +11,23 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Settings modal state
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'password' | 'delete'>('password');
+
+  // Change password state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  // Delete account state
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
   useEffect(() => {
     loadProjects();
   }, []);
@@ -47,6 +64,69 @@ export function DashboardPage() {
     navigate('/');
   };
 
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Les mots de passe ne correspondent pas');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setPasswordError('Le mot de passe doit contenir au moins 8 caractères');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    const { error: apiError } = await api.changePassword(currentPassword, newPassword);
+
+    if (apiError) {
+      setPasswordError(apiError);
+    } else {
+      setPasswordSuccess('Mot de passe modifié avec succès');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    }
+    setIsChangingPassword(false);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'SUPPRIMER') {
+      setDeleteError('Veuillez taper SUPPRIMER pour confirmer');
+      return;
+    }
+
+    setDeleteError(null);
+    setIsDeletingAccount(true);
+
+    const { error: apiError } = await api.deleteAccount();
+
+    if (apiError) {
+      setDeleteError(apiError);
+      setIsDeletingAccount(false);
+    } else {
+      // Account deleted, logout and redirect
+      await logout();
+      navigate('/');
+    }
+  };
+
+  const openSettings = () => {
+    setShowSettings(true);
+    setSettingsTab('password');
+    // Reset all form states
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError(null);
+    setPasswordSuccess(null);
+    setDeleteConfirmText('');
+    setDeleteError(null);
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('fr-FR', {
       day: 'numeric',
@@ -68,6 +148,16 @@ export function DashboardPage() {
           </Link>
           <div className="flex items-center gap-4">
             <span className="text-gray-600">{user?.email}</span>
+            <button
+              onClick={openSettings}
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition"
+              title="Paramètres"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
             <button
               onClick={handleLogout}
               className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition"
@@ -178,6 +268,154 @@ export function DashboardPage() {
           </div>
         )}
       </main>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-xl font-bold text-gray-800">Paramètres du compte</h2>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition"
+              >
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b">
+              <button
+                onClick={() => setSettingsTab('password')}
+                className={`flex-1 px-4 py-3 text-sm font-medium transition ${
+                  settingsTab === 'password'
+                    ? 'text-amber-600 border-b-2 border-amber-500'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Changer le mot de passe
+              </button>
+              <button
+                onClick={() => setSettingsTab('delete')}
+                className={`flex-1 px-4 py-3 text-sm font-medium transition ${
+                  settingsTab === 'delete'
+                    ? 'text-red-600 border-b-2 border-red-500'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Supprimer le compte
+              </button>
+            </div>
+
+            {/* Tab Content */}
+            <div className="p-6">
+              {settingsTab === 'password' && (
+                <form onSubmit={handleChangePassword} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Mot de passe actuel
+                    </label>
+                    <input
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nouveau mot de passe
+                    </label>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      required
+                      minLength={8}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Confirmer le nouveau mot de passe
+                    </label>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      required
+                      minLength={8}
+                    />
+                  </div>
+
+                  {passwordError && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                      {passwordError}
+                    </div>
+                  )}
+
+                  {passwordSuccess && (
+                    <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+                      {passwordSuccess}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isChangingPassword}
+                    className="w-full px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg transition disabled:opacity-50"
+                  >
+                    {isChangingPassword ? 'Modification...' : 'Modifier le mot de passe'}
+                  </button>
+                </form>
+              )}
+
+              {settingsTab === 'delete' && (
+                <div className="space-y-4">
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <h3 className="text-red-800 font-semibold mb-2">Attention !</h3>
+                    <p className="text-red-700 text-sm">
+                      La suppression de votre compte est irréversible. Tous vos projets et données seront définitivement supprimés.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Tapez <span className="font-bold">SUPPRIMER</span> pour confirmer
+                    </label>
+                    <input
+                      type="text"
+                      value={deleteConfirmText}
+                      onChange={(e) => setDeleteConfirmText(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      placeholder="SUPPRIMER"
+                    />
+                  </div>
+
+                  {deleteError && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                      {deleteError}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={isDeletingAccount || deleteConfirmText !== 'SUPPRIMER'}
+                    className="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isDeletingAccount ? 'Suppression...' : 'Supprimer mon compte définitivement'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

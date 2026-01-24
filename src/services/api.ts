@@ -117,6 +117,13 @@ class ApiClient {
     });
   }
 
+  async changePassword(currentPassword: string, newPassword: string) {
+    return this.request<{ message: string }>('/auth/password', {
+      method: 'PUT',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  }
+
   // Project endpoints
   async getProjects() {
     return this.request<{ projects: ProjectSummary[] }>('/projects');

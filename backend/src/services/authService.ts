@@ -171,3 +171,36 @@ export const deleteUser = async (id: string): Promise<boolean> => {
 
   return result.rowCount !== null && result.rowCount > 0;
 };
+
+export const changePassword = async (
+  userId: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<{ success: boolean; error?: string }> => {
+  // Get user with password hash
+  const result = await query(
+    'SELECT password_hash FROM users WHERE id = $1',
+    [userId]
+  );
+
+  if (result.rows.length === 0) {
+    return { success: false, error: 'Utilisateur non trouvé' };
+  }
+
+  const user = result.rows[0];
+
+  // Verify current password
+  const isValid = await comparePassword(currentPassword, user.password_hash);
+  if (!isValid) {
+    return { success: false, error: 'Mot de passe actuel incorrect' };
+  }
+
+  // Hash new password and update
+  const newPasswordHash = await hashPassword(newPassword);
+  await query(
+    'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
+    [newPasswordHash, userId]
+  );
+
+  return { success: true };
+};

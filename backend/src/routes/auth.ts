@@ -53,6 +53,21 @@ router.post('/logout', authenticateToken, authController.logout);
 // DELETE /api/auth/account - Delete user account
 router.delete('/account', authenticateToken, authController.deleteAccount);
 
+// PUT /api/auth/password - Change password
+router.put(
+  '/password',
+  authenticateToken,
+  [
+    body('currentPassword')
+      .notEmpty()
+      .withMessage('Le mot de passe actuel est requis'),
+    body('newPassword')
+      .isLength({ min: 8 })
+      .withMessage('Le nouveau mot de passe doit contenir au moins 8 caractères'),
+  ],
+  authController.changePassword
+);
+
 // POST /api/auth/verify-email
 router.post('/verify-email', authController.verifyEmail);
 

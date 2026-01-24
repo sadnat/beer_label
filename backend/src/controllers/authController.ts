@@ -263,3 +263,36 @@ export const deleteAccount = async (req: AuthRequest, res: Response): Promise<vo
     res.status(500).json({ error: 'Erreur lors de la suppression du compte' });
   }
 };
+
+export const changePassword = async (req: AuthRequest, res: Response): Promise<void> => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    res.status(400).json({ errors: errors.array() });
+    return;
+  }
+
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Non authentifié' });
+      return;
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    const result = await authService.changePassword(
+      req.user.userId,
+      currentPassword,
+      newPassword
+    );
+
+    if (!result.success) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+
+    res.json({ message: 'Mot de passe modifié avec succès' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ error: 'Erreur lors du changement de mot de passe' });
+  }
+};
