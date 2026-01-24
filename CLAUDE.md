@@ -4,10 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Beer Label Editor - A client-side React application for designing professional beer bottle and can labels. Uses Fabric.js for canvas-based editing and jsPDF for high-resolution PDF export.
+Beer Label Editor - A full-stack React application for designing professional beer bottle and can labels. Uses Fabric.js for canvas-based editing, jsPDF for high-resolution PDF export, Express.js backend with PostgreSQL for user authentication and project storage.
 
 ## Development Commands
 
+### Frontend
 ```bash
 npm run dev       # Start dev server on port 5173
 npm run build     # TypeScript check + Vite production build
@@ -15,91 +16,240 @@ npm run lint      # ESLint validation
 npm run preview   # Preview production build
 ```
 
+### Backend
+```bash
+cd backend
+npm run dev       # Start dev server with hot reload
+npm run build     # TypeScript compilation
+npm run start     # Start production server
+```
+
 ## Docker Deployment
 
 ```bash
-docker compose up -d --build   # Build and start container
-docker compose logs -f         # View logs
-docker compose down            # Stop container
+docker compose up -d --build   # Build and start all services
+docker compose logs -f         # View logs (all services)
+docker compose logs -f api     # View API logs only
+docker compose down            # Stop all containers
+docker compose restart api     # Restart API after changes
+```
+
+### Database Operations
+```bash
+# Access PostgreSQL
+docker compose exec postgres psql -U beer_label -d beer_label_db
+
+# Run migrations manually
+docker compose exec postgres psql -U beer_label -d beer_label_db -f /docker-entrypoint-initdb.d/002_email_verification.sql
 ```
 
 Note: Use `docker compose` (without hyphen) - the new Docker Compose V2 syntax.
 
 ## Architecture
 
-### Component Hierarchy
+### System Architecture
 
 ```
-App.tsx                        # Main orchestrator, global state management
-├── Header                     # Top navigation
-├── Sidebar                    # Tabbed panel container
-│   ├── ElementsPanel          # Add beer fields, text, images, shapes
-│   ├── LayersPanel            # Object z-order management
-│   ├── FormatPanel            # Label format selection
-│   └── StylePanel             # Text/image styling controls
-├── CanvasEditor               # Fabric.js canvas wrapper + toolbar
-├── TemplateGallery            # Template browser modal
-└── MultiLabelExport           # A4 sheet printing modal
+┌─────────────────────────────────────────────────────────────┐
+│                    Docker Compose                            │
+├─────────────┬─────────────────────┬─────────────────────────┤
+│  PostgreSQL │    API (Express)    │   Frontend (Nginx)      │
+│   :5432     │       :3000         │        :80              │
+│             │                     │   /api → proxy → API    │
+└─────────────┴─────────────────────┴─────────────────────────┘
 ```
 
-### Key Files
+### Frontend Component Hierarchy
 
-- `src/hooks/useCanvas.ts` - Core Fabric.js wrapper hook (canvas operations, history, selection)
-- `src/types/label.ts` - TypeScript interfaces (LabelFormat, LabelElement, BeerLabelData, ElementStyle)
-- `src/constants/labelFormats.ts` - 5 predefined label formats + mm/px conversion constants
-- `src/constants/defaultStyles.ts` - 60+ Google Fonts, default styles, field templates
-- `src/utils/formatConverter.ts` - mm↔px conversion (96 DPI for screen, 300 DPI for print)
-- `src/utils/printCalculator.ts` - A4 sheet layout calculation for multi-label export
-- `src/data/templates.ts` - 4 pre-made templates as Fabric.js JSON
+```
+main.tsx                       # Router setup, AuthProvider
+├── HomePage                   # Landing page (public)
+├── LoginPage                  # User login
+├── RegisterPage               # User registration
+├── VerifyEmailPage            # Email verification handler
+├── DashboardPage              # Project list (protected)
+└── EditorPage                 # Label editor (protected)
+    ├── Header                 # Top navigation + save/export
+    ├── Sidebar                # Tabbed panel container
+    │   ├── ElementsPanel      # Add beer fields, text, images, shapes
+    │   ├── LayersPanel        # Object z-order management
+    │   ├── FormatPanel        # Label format selection
+    │   └── StylePanel         # Text/image styling controls
+    ├── CanvasEditor           # Fabric.js canvas wrapper + toolbar
+    ├── TemplateGallery        # Template browser modal
+    └── MultiLabelExport       # A4 sheet printing modal
+```
+
+### Backend Structure
+
+```
+backend/
+├── src/
+│   ├── index.ts              # Express app entry point
+│   ├── config/
+│   │   └── database.ts       # PostgreSQL connection pool
+│   ├── middleware/
+│   │   └── auth.ts           # JWT authentication middleware
+│   ├── routes/
+│   │   ├── auth.ts           # /api/auth/* routes
+│   │   └── projects.ts       # /api/projects/* routes
+│   ├── controllers/
+│   │   ├── authController.ts # Auth request handlers
+│   │   └── projectController.ts
+│   └── services/
+│       ├── authService.ts    # User/JWT operations
+│       ├── emailService.ts   # Nodemailer SMTP
+│       └── projectService.ts # Project CRUD
+├── migrations/
+│   ├── 001_initial_schema.sql
+│   └── 002_email_verification.sql
+├── package.json
+├── tsconfig.json
+└── Dockerfile
+```
+
+### Key Frontend Files
+
+- `src/services/api.ts` - API client with JWT token management
+- `src/contexts/AuthContext.tsx` - Authentication state management
+- `src/components/Auth/ProtectedRoute.tsx` - Route protection wrapper
+- `src/pages/Editor.tsx` - Main editor with project load/save
+- `src/hooks/useCanvas.ts` - Core Fabric.js wrapper hook
+- `src/types/label.ts` - TypeScript interfaces
+
+### Database Schema
+
+```sql
+-- Users table
+users (
+    id UUID PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    email_verified BOOLEAN DEFAULT FALSE,
+    verification_token VARCHAR(255),
+    verification_token_expires TIMESTAMP,
+    password_reset_token VARCHAR(255),
+    password_reset_expires TIMESTAMP,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+)
+
+-- Projects table
+projects (
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    format_id VARCHAR(50) NOT NULL,
+    format_width DECIMAL(10,2) NOT NULL,
+    format_height DECIMAL(10,2) NOT NULL,
+    canvas_json TEXT NOT NULL,
+    beer_data JSONB NOT NULL,
+    thumbnail TEXT,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+)
+```
+
+### API Endpoints
+
+**Authentication (`/api/auth/`)**
+| Method | Endpoint            | Description                    |
+|--------|---------------------|--------------------------------|
+| POST   | /register           | Create account                 |
+| POST   | /login              | Login                          |
+| GET    | /me                 | Get current user               |
+| POST   | /logout             | Logout                         |
+| POST   | /verify-email       | Verify email with token        |
+| POST   | /resend-verification| Resend verification email      |
+| POST   | /forgot-password    | Request password reset         |
+| POST   | /reset-password     | Reset password with token      |
+| DELETE | /account            | Delete user account            |
+
+**Projects (`/api/projects/`)**
+| Method | Endpoint | Description          |
+|--------|----------|----------------------|
+| GET    | /        | List user projects   |
+| GET    | /:id     | Get project details  |
+| POST   | /        | Create project       |
+| PUT    | /:id     | Update project       |
+| DELETE | /:id     | Delete project       |
 
 ### State Flow
 
-1. User interactions modify state in App.tsx via useState hooks
-2. Canvas operations go through `canvasActionsRef` exposed by useCanvas hook
-3. Fabric.js Canvas manages all 2D objects (text, images, shapes)
-4. Undo/redo history maintained in useCanvas (max 50 states)
-5. Projects persist to localStorage
+1. User authenticates via AuthContext (JWT stored in localStorage)
+2. Protected routes check authentication before rendering
+3. Editor loads/saves projects via API
+4. Canvas operations go through `canvasActionsRef` exposed by useCanvas hook
+5. Auto-save triggers after 30 seconds of inactivity
+6. Fabric.js Canvas manages all 2D objects (text, images, shapes)
+7. Undo/redo history maintained in useCanvas (max 50 states)
 
 ### Canvas Operations (useCanvas hook)
 
-The hook exposes methods via ref: `addText`, `addImage`, `addShape`, `deleteSelected`, `undo`, `redo`, `bringForward`, `sendBackward`, `applyTemplate`, `exportToPDF`, `getCanvasJSON`.
+The hook exposes methods via ref:
+- `addText`, `addImage`, `addRectangle`, `addCircle`, `addLine`
+- `deleteSelected`, `duplicateSelected`
+- `undo`, `redo`
+- `bringForward`, `sendBackward`, `bringToFront`, `sendToBack`
+- `loadFromJSON` (for templates with scaling)
+- `loadFromJSONRaw` (for saved projects without scaling)
+- `toJSON`, `toDataURL`
 
 Keyboard shortcuts: Delete (remove), Ctrl+Z (undo), Ctrl+Y (redo), Ctrl+D (duplicate)
 
-### Text Styling Features
+## Environment Configuration
 
-StylePanel provides text formatting controls:
-- **Font**: 60+ Google Fonts selection
-- **Size**: Range slider + numeric input (6-200px)
-- **Style**: Bold, Italic, Underline toggles
-- **Color**: Color picker + quick color palette
-- **Spacing**: Line height (0.8-3) and letter spacing (-5 to 20px)
-- **Shadow**: Toggle with color, blur (0-20px), and offset X/Y (-20 to 20px)
+Create a `.env` file at the project root:
 
-Note: Text alignment (left/center/right) was removed as unnecessary for label design.
+```bash
+# Database
+DB_PASSWORD=secure_password_here
 
-### StylePanel Local State Pattern
+# JWT
+JWT_SECRET=your_jwt_secret_here
 
-StylePanel uses local state to ensure smooth UI updates for sliders and toggle buttons. The pattern:
-1. Local state (`textStyle`, `shadowValues`, `imageValues`) holds current values
-2. `useRef` tracks previous element ID to detect selection changes
-3. State syncs from `selectedElement` only when a NEW element is selected
-4. Changes update local state immediately, then propagate to parent via callbacks
+# SMTP (optional - if not set, email verification is disabled)
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-email@example.com
+SMTP_PASS=your-email-password
+SMTP_FROM=Beer Label Editor <noreply@example.com>
 
-This prevents React re-renders from resetting slider positions mid-drag.
+# Application URL (for email links)
+APP_URL=https://your-domain.com
+```
+
+**Note:** If SMTP is not configured, users are automatically verified on registration.
 
 ## Tech Stack
 
+### Frontend
 - **React 18** with TypeScript (strict mode, ES2020 target)
+- **React Router 6** for client-side routing
 - **Fabric.js 6.5** for canvas manipulation
 - **jsPDF 2.5** for PDF generation
 - **Tailwind CSS 3.4** for styling
 - **Vite 6** for build tooling
 
+### Backend
+- **Express 4.18** REST API
+- **PostgreSQL 16** database
+- **JWT** for authentication
+- **bcrypt** for password hashing
+- **Nodemailer** for email sending
+- **express-validator** for input validation
+
+### Infrastructure
+- **Docker Compose** with 3 services (postgres, api, frontend)
+- **Nginx** for static hosting + API reverse proxy
+- External network `npm_default` for Nginx Proxy Manager integration
+
 ## Notes
 
 - UI text is in French
-- No backend - entirely client-side SPA
-- No test infrastructure configured
 - Path alias: `@/*` maps to `src/*`
 - Export uses 4x resolution multiplier for print quality
+- Canvas JSON is stored as TEXT in PostgreSQL (can be large)
+- Thumbnails are stored as base64 in the database
+- Projects are deleted via CASCADE when user is deleted
