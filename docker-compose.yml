@@ -1,20 +1,79 @@
 services:
-  beer-label-editor:
+  postgres:
+    image: postgres:16-alpine
+    container_name: beer_label_db
+    environment:
+      POSTGRES_USER: beer_label
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme_in_production}
+      POSTGRES_DB: beer_label_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - beer_label_internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U beer_label -d beer_label_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: beer_label_api
+    environment:
+      DATABASE_URL: postgres://beer_label:${DB_PASSWORD:-changeme_in_production}@postgres:5432/beer_label_db
+      JWT_SECRET: ${JWT_SECRET:-changeme_jwt_secret_in_production}
+      JWT_EXPIRES_IN: 7d
+      PORT: 3000
+      NODE_ENV: production
+      # SMTP Configuration
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      APP_URL: ${APP_URL:-http://localhost}
+    networks:
+      - beer_label_internal
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: beer_label
     networks:
+      - beer_label_internal
       - npm_default
     restart: unless-stopped
+    depends_on:
+      - api
+
 networks:
-    npm_default:
-      external: true
+  beer_label_internal:
+    driver: bridge
+  npm_default:
+    external: true
+
+volumes:
+  postgres_data:
+
 # Pour lancer:
-# docker-compose up -d --build
+# docker compose up -d --build
 #
 # Pour voir les logs:
-# docker-compose logs -f
+# docker compose logs -f
 #
 # Pour arrêter:
-# docker-compose down
+# docker compose down
+#
+# Variables d'environnement requises (créer un fichier .env):
+# DB_PASSWORD=votre_mot_de_passe_securise
+# JWT_SECRET=votre_secret_jwt_securise

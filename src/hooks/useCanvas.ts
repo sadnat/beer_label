@@ -56,9 +56,23 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     }
   }, [onObjectsChange]);
 
-  // Initialize canvas
+  // Refs for callbacks to avoid dependency issues
+  const saveHistoryRef = useRef(saveHistory);
+  const notifyObjectsChangeRef = useRef(notifyObjectsChange);
+
   useEffect(() => {
-    if (!canvasRef.current) return;
+    saveHistoryRef.current = saveHistory;
+  }, [saveHistory]);
+
+  useEffect(() => {
+    notifyObjectsChangeRef.current = notifyObjectsChange;
+  }, [notifyObjectsChange]);
+
+  // Initialize canvas - only once on mount
+  const initializedRef = useRef(false);
+
+  useEffect(() => {
+    if (!canvasRef.current || initializedRef.current) return;
 
     const canvasWidth = mmToPx(format.width, scale);
     const canvasHeight = mmToPx(format.height, scale);
@@ -72,6 +86,7 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     });
 
     fabricRef.current = canvas;
+    initializedRef.current = true;
 
     // Selection events
     canvas.on('selection:created', (e) => {
@@ -88,28 +103,29 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
 
     // Track modifications for history
     canvas.on('object:added', () => {
-      saveHistory();
-      notifyObjectsChange();
+      saveHistoryRef.current();
+      notifyObjectsChangeRef.current();
     });
 
     canvas.on('object:removed', () => {
-      saveHistory();
-      notifyObjectsChange();
+      saveHistoryRef.current();
+      notifyObjectsChangeRef.current();
     });
 
     canvas.on('object:modified', () => {
-      saveHistory();
-      notifyObjectsChange();
+      saveHistoryRef.current();
+      notifyObjectsChangeRef.current();
     });
 
     // Save initial state
-    setTimeout(() => saveHistory(), 100);
+    setTimeout(() => saveHistoryRef.current(), 100);
 
     return () => {
       canvas.dispose();
       fabricRef.current = null;
+      initializedRef.current = false;
     };
-  }, [format.width, format.height, scale, saveHistory, notifyObjectsChange]);
+  }, []); // Only run once on mount
 
   // Update canvas size when format or scale changes
   useEffect(() => {
@@ -641,6 +657,16 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     notifyObjectsChange();
   }, [saveHistory, notifyObjectsChange]);
 
+  // Load from JSON without scaling (for saved projects)
+  const loadFromJSONRaw = useCallback(async (json: string) => {
+    if (!fabricRef.current) return;
+
+    await fabricRef.current.loadFromJSON(json);
+    fabricRef.current.renderAll();
+    saveHistory();
+    notifyObjectsChange();
+  }, [saveHistory, notifyObjectsChange]);
+
   // Export to JSON
   const toJSON = useCallback(() => {
     if (!fabricRef.current) return '';
@@ -678,6 +704,7 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     redo,
     clearCanvas,
     loadFromJSON,
+    loadFromJSONRaw,
     toJSON,
   };
 }

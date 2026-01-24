@@ -38,6 +38,7 @@ interface CanvasEditorProps {
     toDataURL: (multiplier: number) => string;
     toJSON: () => string;
     loadFromJSON: (json: string) => Promise<void>;
+    loadFromJSONRaw: (json: string) => Promise<void>;
     clearCanvas: () => void;
   } | null>;
 }
@@ -101,6 +102,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
     toDataURL,
     toJSON,
     loadFromJSON,
+    loadFromJSONRaw,
     clearCanvas,
     zoomIn,
     zoomOut,
@@ -146,9 +148,10 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
       toDataURL,
       toJSON,
       loadFromJSON,
+      loadFromJSONRaw,
       clearCanvas,
     };
-  }, [addText, addImage, addRectangle, addCircle, addLine, updateSelectedStyle, updateImageStyle, deleteSelected, duplicateSelected, undo, redo, bringForward, sendBackward, bringToFront, sendToBack, selectObject, getObjects, toDataURL, toJSON, loadFromJSON, clearCanvas, actionsRef]);
+  }, [addText, addImage, addRectangle, addCircle, addLine, updateSelectedStyle, updateImageStyle, deleteSelected, duplicateSelected, undo, redo, bringForward, sendBackward, bringToFront, sendToBack, selectObject, getObjects, toDataURL, toJSON, loadFromJSON, loadFromJSONRaw, clearCanvas, actionsRef]);
 
   // Keyboard shortcuts
   useEffect(() => {

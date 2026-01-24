@@ -59,6 +59,7 @@ function App() {
     toDataURL: (multiplier: number) => string;
     toJSON: () => string;
     loadFromJSON: (json: string) => Promise<void>;
+    loadFromJSONRaw: (json: string) => Promise<void>;
     clearCanvas: () => void;
   } | null>(null);
 
