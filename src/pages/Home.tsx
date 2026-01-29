@@ -1,8 +1,16 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useEffect } from 'react';
 
 export function HomePage() {
   const { isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    document.body.classList.add('overflow-auto-body');
+    return () => {
+      document.body.classList.remove('overflow-auto-body');
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100">

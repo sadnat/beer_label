@@ -29,6 +29,7 @@ export interface ElementStyle {
   textAlign: 'left' | 'center' | 'right';
   lineHeight: number;
   letterSpacing: number;
+  opacity?: number;
   shadow?: ShadowStyle;
   stroke?: StrokeStyle;
 }

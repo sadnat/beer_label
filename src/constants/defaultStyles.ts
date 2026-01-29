@@ -92,13 +92,22 @@ export const GOOGLE_FONTS: FontOption[] = [
   { name: 'Fascinate Inline', value: 'Fascinate Inline' },
 
   // === GOTHIC & BLACKLETTER ===
-  { name: '── Gothique ──', value: '', disabled: true },
+  { name: '── Gothique & Western ──', value: '', disabled: true },
+  { name: '── Western & Slab ──', value: '', disabled: true },
+  { name: 'Rye', value: 'Rye' },
+  { name: 'Ultra', value: 'Ultra' },
+  { name: 'Graduate', value: 'Graduate' },
   { name: 'UnifrakturMaguntia', value: 'UnifrakturMaguntia' },
   { name: 'MedievalSharp', value: 'MedievalSharp' },
   { name: 'Pirata One', value: 'Pirata One' },
   { name: 'Nosifer', value: 'Nosifer' },
   { name: 'Eater', value: 'Eater' },
   { name: 'Butcherman', value: 'Butcherman' },
+  
+  // === INDUSTRIAL & STENCIL ===
+  { name: '── Industriel & Pochoir ──', value: '', disabled: true },
+  { name: 'Major Mono Display', value: 'Major Mono Display' },
+  { name: 'Megrim', value: 'Megrim' },
 ];
 
 export const DEFAULT_ELEMENT_STYLE: ElementStyle = {

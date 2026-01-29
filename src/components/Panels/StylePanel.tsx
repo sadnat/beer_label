@@ -56,6 +56,7 @@ export const StylePanel: React.FC<StylePanelProps> = ({
     color: '#000000',
     lineHeight: 1.2,
     letterSpacing: 0,
+    opacity: 1,
   });
 
   // Local state for shadow values to ensure smooth slider animations
@@ -87,6 +88,7 @@ export const StylePanel: React.FC<StylePanelProps> = ({
           color: selectedElement.style.color,
           lineHeight: selectedElement.style.lineHeight,
           letterSpacing: selectedElement.style.letterSpacing,
+          opacity: selectedElement.style.opacity ?? 1,
         });
       }
 
@@ -383,6 +385,27 @@ export const StylePanel: React.FC<StylePanelProps> = ({
                   </span>
                 </div>
               </div>
+            </div>
+          </section>
+
+          {/* Opacity */}
+          <section>
+            <h3 className="text-sm font-semibold text-amber-400 mb-3 uppercase tracking-wide">
+              Opacité
+            </h3>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                value={textStyle.opacity}
+                onChange={(e) => handleTextStyleChange({ opacity: parseFloat(e.target.value) })}
+                min={0}
+                max={1}
+                step={0.05}
+                className="flex-1 accent-amber-500"
+              />
+              <span className="w-12 text-center text-sm text-gray-300">
+                {Math.round(textStyle.opacity * 100)}%
+              </span>
             </div>
           </section>
 

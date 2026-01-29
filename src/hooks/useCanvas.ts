@@ -362,22 +362,27 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     if (style.textAlign !== undefined) updates.textAlign = style.textAlign;
     if (style.lineHeight !== undefined) updates.lineHeight = style.lineHeight;
     if (style.letterSpacing !== undefined) updates.charSpacing = style.letterSpacing * 10;
+    if (style.opacity !== undefined) (updates as unknown as { opacity: number }).opacity = style.opacity;
 
-    // Handle shadow
-    if (style.shadow !== undefined) {
+    // Handle shadow separately - setting it directly works better in Fabric.js
+    if (Object.prototype.hasOwnProperty.call(style, 'shadow')) {
       if (style.shadow) {
-        updates.shadow = new fabric.Shadow({
+        selectedObject.set('shadow', new fabric.Shadow({
           color: style.shadow.color,
           blur: style.shadow.blur,
           offsetX: style.shadow.offsetX,
           offsetY: style.shadow.offsetY,
-        });
+        }));
       } else {
-        updates.shadow = undefined;
+        // Remove shadow by setting to null
+        selectedObject.set('shadow', null);
       }
     }
 
-    selectedObject.set(updates);
+    // Apply other updates
+    if (Object.keys(updates).length > 0) {
+      selectedObject.set(updates);
+    }
     fabricRef.current.renderAll();
     saveHistory();
   }, [selectedObject, scale, saveHistory]);
@@ -662,6 +667,7 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     if (!fabricRef.current) return;
 
     await fabricRef.current.loadFromJSON(json);
+    fabricRef.current.discardActiveObject();
     fabricRef.current.renderAll();
     saveHistory();
     notifyObjectsChange();

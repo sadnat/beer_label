@@ -14,7 +14,9 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: #1a1a2e;
   color: #eaeaea;
-  overflow: hidden;
+  body.overflow-auto-body {
+  overflow: auto;
+}
 }
 
 #root {
