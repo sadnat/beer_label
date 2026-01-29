@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # PostgreSQL test database
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: beer_label_postgres_test
+    environment:
+      POSTGRES_USER: beer_label_test
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: beer_label_test_db
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U beer_label_test -d beer_label_test_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ./backend/migrations:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  # Backend tests
+  api-test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
+    container_name: beer_label_api_test
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://beer_label_test:test_password@postgres-test:5432/beer_label_test_db
+      JWT_SECRET: test-jwt-secret-for-testing
+      APP_URL: http://localhost:5173
+      SMTP_HOST: ""
+      SMTP_PORT: ""
+      SMTP_USER: ""
+      SMTP_PASS: ""
+    command: npm run test:coverage
+    volumes:
+      - ./backend/coverage:/app/coverage
+
+  # Frontend tests
+  frontend-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: beer_label_frontend_test
+    environment:
+      NODE_ENV: test
+    command: npm run test:coverage
+    volumes:
+      - ./coverage:/app/coverage
+
+networks:
+  default:
+    name: beer_label_test_network
