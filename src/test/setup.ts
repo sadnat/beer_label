@@ -1,5 +1,9 @@
+/// <reference types="node" />
 import '@testing-library/jest-dom';
 import { vi, beforeEach, afterEach } from 'vitest';
+
+// Declare global for Node.js environment
+declare const global: typeof globalThis;
 
 // ============================================
 // localStorage Mock

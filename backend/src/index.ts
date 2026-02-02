@@ -7,7 +7,7 @@ import authRoutes from './routes/auth';
 import projectRoutes from './routes/projects';
 import adminRoutes from './routes/admin';
 
-const app = express();
+export const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Security middleware
@@ -42,7 +42,9 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   res.status(500).json({ error: 'Erreur serveur interne' });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`API server running on port ${PORT}`);
-});
+// Start server only if not in test mode
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`API server running on port ${PORT}`);
+  });
+}

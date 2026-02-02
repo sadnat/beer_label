@@ -15,7 +15,10 @@
     "test:docker": "docker compose -f docker-compose.test.yml up --build --abort-on-container-exit",
     "test:docker:backend": "docker compose -f docker-compose.test.yml up api-test --build --abort-on-container-exit",
     "test:docker:frontend": "docker compose -f docker-compose.test.yml up frontend-test --build --abort-on-container-exit",
-    "test:docker:down": "docker compose -f docker-compose.test.yml down -v"
+    "test:docker:down": "docker compose -f docker-compose.test.yml down -v",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
     "fabric": "^6.5.4",
@@ -26,9 +29,11 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@playwright/test": "^1.58.1",
     "@testing-library/jest-dom": "^6.4.2",
     "@testing-library/react": "^14.2.1",
     "@testing-library/user-event": "^14.5.2",
+    "@types/node": "^25.2.0",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
