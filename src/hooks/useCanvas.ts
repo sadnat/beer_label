@@ -669,6 +669,20 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     await fabricRef.current.loadFromJSON(json);
     fabricRef.current.discardActiveObject();
     fabricRef.current.renderAll();
+    
+    // Wait for fonts to be loaded, then re-render to fix font display
+    document.fonts.ready.then(() => {
+      if (fabricRef.current) {
+        // Force re-render of all text objects to apply loaded fonts
+        fabricRef.current.getObjects().forEach((obj) => {
+          if (obj instanceof fabric.IText || obj instanceof fabric.Text) {
+            obj.dirty = true;
+          }
+        });
+        fabricRef.current.renderAll();
+      }
+    });
+    
     saveHistory();
     notifyObjectsChange();
   }, [saveHistory, notifyObjectsChange]);
