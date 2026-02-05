@@ -9,6 +9,21 @@ interface ElementsPanelProps {
   onAddRectangle?: (color: string, strokeColor: string) => void;
   onAddCircle?: (color: string, strokeColor: string) => void;
   onAddLine?: (color: string) => void;
+  onAddCurvedText?: (text: string, radius: number, curve: number, flip: boolean) => void;
+}
+
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 Mo
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'];
+
+function validateImageFile(file: File): string | null {
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    return 'Format non supporté. Utilisez JPEG, PNG, WebP ou SVG.';
+  }
+  if (file.size > MAX_IMAGE_SIZE) {
+    const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+    return `Fichier trop volumineux (${sizeMB} Mo). Taille maximale : 5 Mo.`;
+  }
+  return null;
 }
 
 export const ElementsPanel: React.FC<ElementsPanelProps> = ({
@@ -19,10 +34,16 @@ export const ElementsPanel: React.FC<ElementsPanelProps> = ({
   onAddRectangle,
   onAddCircle,
   onAddLine,
+  onAddCurvedText,
 }) => {
   const [customText, setCustomText] = useState('');
+  const [curvedText, setCurvedText] = useState('');
+  const [curvedRadius, setCurvedRadius] = useState(150);
+  const [curvedAngle, setCurvedAngle] = useState(180);
+  const [curvedFlip, setCurvedFlip] = useState(false);
   const [shapeColor, setShapeColor] = useState('#d4af37');
   const [strokeColor, setStrokeColor] = useState('#000000');
+  const [imageError, setImageError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bgFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -65,6 +86,13 @@ export const ElementsPanel: React.FC<ElementsPanelProps> = ({
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, isBackground: boolean) => {
     const file = e.target.files?.[0];
     if (file) {
+      const error = validateImageFile(file);
+      if (error) {
+        setImageError(error);
+        e.target.value = '';
+        return;
+      }
+      setImageError(null);
       const reader = new FileReader();
       reader.onload = (event) => {
         const dataUrl = event.target?.result as string;
@@ -165,6 +193,66 @@ export const ElementsPanel: React.FC<ElementsPanelProps> = ({
         </div>
       </section>
 
+      {/* Curved Text Section */}
+      <section>
+        <h3 className="text-sm font-semibold text-amber-400 mb-3 uppercase tracking-wide">
+          Texte Courbé
+        </h3>
+        <div className="space-y-3">
+          <input
+            type="text"
+            value={curvedText}
+            onChange={(e) => setCurvedText(e.target.value)}
+            placeholder="Texte en arc..."
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          />
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-gray-400 w-14">Rayon</label>
+            <input
+              type="range"
+              min="50"
+              max="400"
+              value={curvedRadius}
+              onChange={(e) => setCurvedRadius(Number(e.target.value))}
+              className="flex-1 accent-amber-500"
+            />
+            <span className="text-xs text-gray-300 w-8 text-right">{curvedRadius}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-gray-400 w-14">Angle</label>
+            <input
+              type="range"
+              min="30"
+              max="360"
+              value={curvedAngle}
+              onChange={(e) => setCurvedAngle(Number(e.target.value))}
+              className="flex-1 accent-amber-500"
+            />
+            <span className="text-xs text-gray-300 w-8 text-right">{curvedAngle}°</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-gray-400">Inverser la courbe</label>
+            <button
+              onClick={() => setCurvedFlip(!curvedFlip)}
+              className={`w-10 h-5 rounded-full transition-colors ${curvedFlip ? 'bg-amber-500' : 'bg-gray-600'}`}
+            >
+              <div className={`w-4 h-4 bg-white rounded-full transition-transform ${curvedFlip ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+          <button
+            onClick={() => {
+              if (curvedText && onAddCurvedText) {
+                onAddCurvedText(curvedText, curvedRadius, curvedAngle, curvedFlip);
+              }
+            }}
+            disabled={!curvedText}
+            className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-md transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed"
+          >
+            Ajouter le texte courbé
+          </button>
+        </div>
+      </section>
+
       {/* Images Section */}
       <section>
         <h3 className="text-sm font-semibold text-amber-400 mb-3 uppercase tracking-wide">
@@ -175,16 +263,29 @@ export const ElementsPanel: React.FC<ElementsPanelProps> = ({
             type="file"
             ref={fileInputRef}
             onChange={(e) => handleImageUpload(e, false)}
-            accept="image/*"
+            accept=".jpg,.jpeg,.png,.webp,.svg"
             className="hidden"
           />
           <input
             type="file"
             ref={bgFileInputRef}
             onChange={(e) => handleImageUpload(e, true)}
-            accept="image/*"
+            accept=".jpg,.jpeg,.png,.webp,.svg"
             className="hidden"
           />
+          {imageError && (
+            <div className="px-3 py-2 bg-red-900/50 border border-red-700 rounded-md text-red-300 text-xs flex items-start gap-2">
+              <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+              <span>{imageError}</span>
+              <button onClick={() => setImageError(null)} className="ml-auto text-red-400 hover:text-red-200">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
           <button
             onClick={() => fileInputRef.current?.click()}
             className="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-md transition-colors flex items-center justify-center gap-2"
@@ -269,6 +370,7 @@ export const ElementsPanel: React.FC<ElementsPanelProps> = ({
           </div>
         </div>
       </section>
+
     </div>
   );
 };

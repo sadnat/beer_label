@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import * as authController from '../controllers/authController';
 import { authenticateToken } from '../middleware/auth';
+import { loginLimiter, registerLimiter, passwordResetLimiter } from '../middleware/rateLimit';
 
 const router = Router();
 
@@ -17,6 +18,7 @@ const normalizeEmailOptions = {
 // POST /api/auth/register
 router.post(
   '/register',
+  registerLimiter,
   [
     body('email')
       .isEmail()
@@ -32,6 +34,7 @@ router.post(
 // POST /api/auth/login
 router.post(
   '/login',
+  loginLimiter,
   [
     body('email')
       .isEmail()
@@ -75,7 +78,7 @@ router.post('/verify-email', authController.verifyEmail);
 router.post('/resend-verification', authController.resendVerification);
 
 // POST /api/auth/forgot-password
-router.post('/forgot-password', authController.forgotPassword);
+router.post('/forgot-password', passwordResetLimiter, authController.forgotPassword);
 
 // POST /api/auth/reset-password
 router.post(
