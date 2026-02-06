@@ -132,6 +132,31 @@ export const updateProject = async (
   }
 };
 
+export const duplicateProject = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Non authentifié' });
+      return;
+    }
+
+    const { id } = req.params;
+    const project = await projectService.duplicateProject(id, req.user.userId);
+
+    if (!project) {
+      res.status(404).json({ error: 'Projet non trouvé' });
+      return;
+    }
+
+    res.status(201).json({ project });
+  } catch (error) {
+    console.error('Duplicate project error:', error);
+    res.status(500).json({ error: 'Erreur lors de la duplication du projet' });
+  }
+};
+
 export const deleteProject = async (
   req: AuthRequest,
   res: Response

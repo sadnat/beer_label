@@ -63,6 +63,7 @@ export function EditorPage() {
     addRectangle: (color: string, strokeColor: string) => void;
     addCircle: (color: string, strokeColor: string) => void;
     addLine: (color: string) => void;
+    addCurvedText: (text: string, radius: number, curve: number, flip: boolean) => void;
     updateStyle: (style: Partial<ElementStyle>) => void;
     updateImageStyle: (props: ImageStyleProps) => void;
     deleteSelected: () => void;
@@ -346,6 +347,13 @@ export function EditorPage() {
     }
   }, [markUnsaved]);
 
+  const handleAddCurvedText = useCallback((text: string, radius: number, curve: number, flip: boolean) => {
+    if (canvasActionsRef.current) {
+      canvasActionsRef.current.addCurvedText(text, radius, curve, flip);
+      markUnsaved();
+    }
+  }, [markUnsaved]);
+
   const handleObjectsChange = useCallback((objects: fabric.FabricObject[]) => {
     setCanvasObjects([...objects]);
     markUnsaved();
@@ -511,6 +519,7 @@ export function EditorPage() {
               onAddRectangle={handleAddRectangle}
               onAddCircle={handleAddCircle}
               onAddLine={handleAddLine}
+              onAddCurvedText={handleAddCurvedText}
             />
           </div>
           <div data-tab="layers">

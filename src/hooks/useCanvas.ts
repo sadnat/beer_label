@@ -15,6 +15,31 @@ const MAX_HISTORY = 50;
 const SNAP_THRESHOLD = 5; // pixels - distance to snap to grid or guides
 const GUIDE_COLOR = '#ff00ff'; // magenta color for smart guides
 
+// Properties to include when serializing canvas to JSON
+// This ensures all text styling properties are properly saved and restored
+const PROPERTIES_TO_INCLUDE = [
+  'fontFamily',
+  'fontWeight',
+  'fontStyle',
+  'fontSize',
+  'fill',
+  'stroke',
+  'strokeWidth',
+  'textAlign',
+  'charSpacing',
+  'lineHeight',
+  'underline',
+  'overline',
+  'linethrough',
+  'opacity',
+  'shadow',
+  'rx',
+  'ry',
+  'isGrid',
+  'isGuide',
+  'excludeFromExport',
+];
+
 export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }: UseCanvasOptions) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricRef = useRef<fabric.Canvas | null>(null);
@@ -49,7 +74,7 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
   const saveHistory = useCallback(() => {
     if (!fabricRef.current || isUndoRedoRef.current) return;
 
-    const json = JSON.stringify(fabricRef.current.toJSON());
+    const json = JSON.stringify(fabricRef.current.toObject(PROPERTIES_TO_INCLUDE));
 
     // Remove any redo states
     historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
@@ -999,6 +1024,33 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     fabricRef.current.renderAll();
   }, []);
 
+  // Helper function to preload fonts used in a canvas JSON
+  const preloadFonts = useCallback(async (data: { objects?: Array<{ fontFamily?: string }> }) => {
+    if (!data.objects) return;
+    
+    // Extract unique font families from text objects
+    const fontFamilies = new Set<string>();
+    data.objects.forEach((obj) => {
+      if (obj.fontFamily && typeof obj.fontFamily === 'string') {
+        fontFamilies.add(obj.fontFamily);
+      }
+    });
+    
+    // Preload each font by creating a temporary element and waiting for the font to load
+    const fontLoadPromises = Array.from(fontFamilies).map(async (fontFamily) => {
+      try {
+        // Use the CSS Font Loading API to load the font
+        await document.fonts.load(`16px "${fontFamily}"`);
+      } catch (e) {
+        console.warn(`[preloadFonts] Could not preload font: ${fontFamily}`, e);
+      }
+    });
+    
+    await Promise.all(fontLoadPromises);
+    // Also wait for all fonts to be ready
+    await document.fonts.ready;
+  }, []);
+
   // Load from JSON with scaling to fit current canvas size
   const loadFromJSON = useCallback(async (json: string) => {
     if (!fabricRef.current) return;
@@ -1011,24 +1063,33 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     const canvasWidth = fabricRef.current.getWidth();
     const canvasHeight = fabricRef.current.getHeight();
 
-    // Calculate scale ratios
+    // Calculate scale ratios - use uniform scaling to maintain proportions
     const scaleX = canvasWidth / TEMPLATE_ORIGINAL_WIDTH;
     const scaleY = canvasHeight / TEMPLATE_ORIGINAL_HEIGHT;
     const scaleFactor = Math.min(scaleX, scaleY);
 
+    // Calculate offset to center the scaled template in the canvas
+    const scaledTemplateWidth = TEMPLATE_ORIGINAL_WIDTH * scaleFactor;
+    const scaledTemplateHeight = TEMPLATE_ORIGINAL_HEIGHT * scaleFactor;
+    const offsetX = (canvasWidth - scaledTemplateWidth) / 2;
+    const offsetY = (canvasHeight - scaledTemplateHeight) / 2;
+
     // Parse and transform JSON
     const data = JSON.parse(json);
+    
+    // Preload all fonts used in the template BEFORE loading into canvas
+    await preloadFonts(data);
 
     if (data.objects && Array.isArray(data.objects)) {
       data.objects = data.objects.map((obj: Record<string, unknown>) => {
         const transformed = { ...obj };
 
-        // Scale position
+        // Scale position uniformly and add offset to center
         if (typeof transformed.left === 'number') {
-          transformed.left = (transformed.left / TEMPLATE_ORIGINAL_WIDTH) * canvasWidth;
+          transformed.left = transformed.left * scaleFactor + offsetX;
         }
         if (typeof transformed.top === 'number') {
-          transformed.top = (transformed.top / TEMPLATE_ORIGINAL_HEIGHT) * canvasHeight;
+          transformed.top = transformed.top * scaleFactor + offsetY;
         }
 
         // Scale dimensions
@@ -1077,40 +1138,64 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     }
 
     await fabricRef.current.loadFromJSON(JSON.stringify(data));
-    fabricRef.current.renderAll();
+    
+    // Force re-render of all text objects to ensure correct font display and dimensions
+    // Use requestAnimationFrame to ensure fonts are fully applied before recalculating
+    const canvas = fabricRef.current;
+    requestAnimationFrame(() => {
+      canvas.getObjects().forEach((obj) => {
+        if (obj instanceof fabric.IText || obj instanceof fabric.Text) {
+          // Clear the cache to force recalculation
+          obj.dirty = true;
+          obj._clearCache();
+          obj.initDimensions();
+          obj.setCoords();
+        }
+      });
+      canvas.requestRenderAll();
+    });
+    
     saveHistory();
     notifyObjectsChange();
-  }, [saveHistory, notifyObjectsChange]);
+  }, [saveHistory, notifyObjectsChange, preloadFonts]);
 
   // Load from JSON without scaling (for saved projects)
   const loadFromJSONRaw = useCallback(async (json: string) => {
     if (!fabricRef.current) return;
 
+    // Parse JSON to preload fonts
+    const data = JSON.parse(json);
+    
+    // Preload all fonts used in the saved project BEFORE loading into canvas
+    await preloadFonts(data);
+    
     await fabricRef.current.loadFromJSON(json);
     fabricRef.current.discardActiveObject();
-    fabricRef.current.renderAll();
     
-    // Wait for fonts to be loaded, then re-render to fix font display
-    document.fonts.ready.then(() => {
-      if (fabricRef.current) {
-        // Force re-render of all text objects to apply loaded fonts
-        fabricRef.current.getObjects().forEach((obj) => {
-          if (obj instanceof fabric.IText || obj instanceof fabric.Text) {
-            obj.dirty = true;
-          }
-        });
-        fabricRef.current.renderAll();
-      }
+    // Force re-render of all text objects to ensure correct font display and dimensions
+    // Use requestAnimationFrame to ensure fonts are fully applied before recalculating
+    const canvas = fabricRef.current;
+    requestAnimationFrame(() => {
+      canvas.getObjects().forEach((obj) => {
+        if (obj instanceof fabric.IText || obj instanceof fabric.Text) {
+          // Clear the cache to force recalculation
+          obj.dirty = true;
+          obj._clearCache();
+          obj.initDimensions();
+          obj.setCoords();
+        }
+      });
+      canvas.requestRenderAll();
     });
     
     saveHistory();
     notifyObjectsChange();
-  }, [saveHistory, notifyObjectsChange]);
+  }, [saveHistory, notifyObjectsChange, preloadFonts]);
 
   // Export to JSON
   const toJSON = useCallback(() => {
     if (!fabricRef.current) return '';
-    return JSON.stringify(fabricRef.current.toJSON());
+    return JSON.stringify(fabricRef.current.toObject(PROPERTIES_TO_INCLUDE));
   }, []);
 
   return {

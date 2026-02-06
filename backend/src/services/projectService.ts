@@ -136,6 +136,32 @@ export const updateProject = async (
   return result.rows[0] || null;
 };
 
+export const duplicateProject = async (
+  projectId: string,
+  userId: string
+): Promise<Project | null> => {
+  const original = await getProjectById(projectId, userId);
+  if (!original) return null;
+
+  const result = await query(
+    `INSERT INTO projects (user_id, name, format_id, format_width, format_height, canvas_json, beer_data, thumbnail)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING *`,
+    [
+      userId,
+      `${original.name} (copie)`,
+      original.format_id,
+      original.format_width,
+      original.format_height,
+      original.canvas_json,
+      JSON.stringify(original.beer_data),
+      original.thumbnail,
+    ]
+  );
+
+  return result.rows[0];
+};
+
 export const deleteProject = async (
   projectId: string,
   userId: string

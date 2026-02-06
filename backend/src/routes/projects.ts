@@ -62,6 +62,9 @@ router.put(
   projectController.updateProject
 );
 
+// POST /api/projects/:id/duplicate
+router.post('/:id/duplicate', projectController.duplicateProject);
+
 // DELETE /api/projects/:id
 router.delete('/:id', projectController.deleteProject);
 

@@ -10,6 +10,7 @@ export function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Settings modal state
@@ -58,6 +59,17 @@ export function DashboardPage() {
       setProjects(projects.filter((p) => p.id !== id));
     }
     setDeletingId(null);
+  };
+
+  const handleDuplicate = async (id: string) => {
+    setDuplicatingId(id);
+    const { data, error: dupError } = await api.duplicateProject(id);
+    if (dupError) {
+      alert(`Erreur: ${dupError}`);
+    } else if (data) {
+      setProjects(prev => [data.project as unknown as ProjectSummary, ...prev]);
+    }
+    setDuplicatingId(null);
   };
 
   const handleLogout = async () => {
@@ -388,9 +400,24 @@ export function DashboardPage() {
                       Ouvrir
                     </Link>
                     <button
+                      onClick={() => handleDuplicate(project.id)}
+                      disabled={duplicatingId === project.id}
+                      className="px-4 py-2 bg-stone-100 hover:bg-blue-100 text-stone-500 hover:text-blue-600 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+                      title="Dupliquer"
+                    >
+                      {duplicatingId === project.id ? (
+                        <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      )}
+                    </button>
+                    <button
                       onClick={() => handleDelete(project.id, project.name)}
                       disabled={deletingId === project.id}
                       className="px-4 py-2 bg-stone-100 hover:bg-red-100 text-stone-500 hover:text-red-600 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+                      title="Supprimer"
                     >
                       {deletingId === project.id ? (
                         <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -443,9 +470,24 @@ export function DashboardPage() {
                     Ouvrir
                   </Link>
                   <button
+                    onClick={() => handleDuplicate(project.id)}
+                    disabled={duplicatingId === project.id}
+                    className="p-2 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                    title="Dupliquer"
+                  >
+                    {duplicatingId === project.id ? (
+                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                  </button>
+                  <button
                     onClick={() => handleDelete(project.id, project.name)}
                     disabled={deletingId === project.id}
                     className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                    title="Supprimer"
                   >
                     {deletingId === project.id ? (
                       <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />

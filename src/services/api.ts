@@ -147,6 +147,12 @@ class ApiClient {
     });
   }
 
+  async duplicateProject(id: string) {
+    return this.request<{ project: Project }>(`/projects/${id}/duplicate`, {
+      method: 'POST',
+    });
+  }
+
   async deleteProject(id: string) {
     return this.request<{ message: string }>(`/projects/${id}`, {
       method: 'DELETE',
