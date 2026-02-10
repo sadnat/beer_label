@@ -19,8 +19,9 @@ export const authenticateToken = async (
   res: Response,
   next: NextFunction
 ): Promise<void> => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  // Read access token from httpOnly cookie (primary) or Authorization header (fallback)
+  const token = req.cookies?.access_token ||
+    (req.headers['authorization'] && req.headers['authorization'].split(' ')[1]);
 
   if (!token) {
     res.status(401).json({ error: 'Token d\'authentification requis' });

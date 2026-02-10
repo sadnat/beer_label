@@ -6,52 +6,39 @@ interface ApiResponse<T> {
 }
 
 class ApiClient {
-  private token: string | null = null;
-
-  constructor() {
-    // Load token from localStorage on init
-    this.token = localStorage.getItem('auth_token');
-  }
-
-  setToken(token: string | null): void {
-    this.token = token;
-    if (token) {
-      localStorage.setItem('auth_token', token);
-    } else {
-      localStorage.removeItem('auth_token');
-    }
-  }
-
-  getToken(): string | null {
-    return this.token;
-  }
+  private isRefreshing = false;
+  private refreshPromise: Promise<boolean> | null = null;
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    skipRefresh = false
   ): Promise<ApiResponse<T>> {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...options.headers,
     };
 
-    if (this.token) {
-      (headers as Record<string, string>)['Authorization'] = `Bearer ${this.token}`;
-    }
-
     try {
       const response = await fetch(`${API_BASE}${endpoint}`, {
         ...options,
         headers,
+        credentials: 'include', // Send httpOnly cookies automatically
       });
+
+      // On 401, try to refresh the access token (unless we're already refreshing or this is a refresh request)
+      if (response.status === 401 && !skipRefresh && !endpoint.includes('/auth/refresh')) {
+        const refreshed = await this.tryRefresh();
+        if (refreshed) {
+          // Retry the original request
+          return this.request<T>(endpoint, options, true);
+        }
+        return { error: 'Session expirée, veuillez vous reconnecter' };
+      }
 
       const data = await response.json();
 
       if (!response.ok) {
-        // Handle 401 - unauthorized
-        if (response.status === 401) {
-          this.setToken(null);
-        }
         return { error: data.error || 'Une erreur est survenue' };
       }
 
@@ -62,11 +49,41 @@ class ApiClient {
     }
   }
 
+  // Try to refresh the access token using the refresh token cookie
+  private async tryRefresh(): Promise<boolean> {
+    // If already refreshing, wait for the existing refresh to complete
+    if (this.isRefreshing && this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    this.isRefreshing = true;
+    this.refreshPromise = this.doRefresh();
+
+    try {
+      return await this.refreshPromise;
+    } finally {
+      this.isRefreshing = false;
+      this.refreshPromise = null;
+    }
+  }
+
+  private async doRefresh(): Promise<boolean> {
+    try {
+      const response = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
   // Auth endpoints
   async register(email: string, password: string) {
     return this.request<{
-      user: User;
-      token?: string;
+      user?: User;
       message: string;
       requiresVerification?: boolean;
     }>('/auth/register', {
@@ -78,7 +95,6 @@ class ApiClient {
   async login(email: string, password: string) {
     return this.request<{
       user: User;
-      token: string;
       requiresVerification?: boolean;
       email?: string;
     }>('/auth/login', {
@@ -95,6 +111,12 @@ class ApiClient {
     return this.request<{ message: string }>('/auth/logout', {
       method: 'POST',
     });
+  }
+
+  async refresh() {
+    return this.request<{ user: User }>('/auth/refresh', {
+      method: 'POST',
+    }, true);
   }
 
   async verifyEmail(token: string) {

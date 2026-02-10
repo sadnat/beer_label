@@ -57,7 +57,10 @@ router.post(
 router.get('/me', authenticateToken, authController.me);
 
 // POST /api/auth/logout
-router.post('/logout', authenticateToken, authController.logout);
+router.post('/logout', authController.logout);
+
+// POST /api/auth/refresh - Refresh access token using refresh token cookie
+router.post('/refresh', authController.refresh);
 
 // DELETE /api/auth/account - Delete user account
 router.delete('/account', authenticateToken, authController.deleteAccount);

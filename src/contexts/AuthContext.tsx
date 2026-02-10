@@ -22,21 +22,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check authentication status on mount
+  // Check authentication status on mount via cookie-based session
   useEffect(() => {
     const checkAuth = async () => {
-      const token = api.getToken();
-      if (!token) {
-        setIsLoading(false);
-        return;
-      }
-
-      const { data, error } = await api.getMe();
+      // Try to get the current user - cookies are sent automatically
+      const { data } = await api.getMe();
       if (data?.user) {
         setUser(data.user);
-      } else if (error) {
-        // Token invalid, clear it
-        api.setToken(null);
       }
       setIsLoading(false);
     };
@@ -50,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return error;
     }
     if (data) {
-      api.setToken(data.token);
+      // Cookies are set automatically by the server response
       setUser(data.user);
     }
     return null;
@@ -70,9 +62,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           message: data.message,
         };
       }
-      // No verification required, log in the user
-      if (data.token) {
-        api.setToken(data.token);
+      // No verification required - cookies set by server, user returned
+      if (data.user) {
         setUser(data.user);
       }
     }
@@ -81,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     await api.logout();
-    api.setToken(null);
+    // Cookies are cleared by the server
     setUser(null);
   };
 

@@ -43,17 +43,96 @@ export const comparePassword = async (
   return bcrypt.compare(password, hash);
 };
 
-export const generateToken = (userId: string, email: string, role: UserRole): string => {
+// Access token: short-lived (15 minutes), stored in httpOnly cookie
+export const generateAccessToken = (userId: string, email: string, role: UserRole): string => {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
     throw new Error('JWT_SECRET is not defined');
   }
 
   const options: SignOptions = {
-    expiresIn: '7d',
+    expiresIn: '15m',
+    algorithm: 'HS256',
   };
 
   return jwt.sign({ userId, email, role }, secret, options);
+};
+
+// Backward compatibility alias
+export const generateToken = generateAccessToken;
+
+// Refresh token: long-lived (7 days), stored hashed in DB + sent as httpOnly cookie
+export const generateRefreshToken = async (userId: string): Promise<{ token: string; expiresAt: Date }> => {
+  const token = crypto.randomBytes(64).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+  await query(
+    `INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
+     VALUES ($1, $2, $3)`,
+    [userId, tokenHash, expiresAt]
+  );
+
+  return { token, expiresAt };
+};
+
+// Validate a refresh token and return the associated user
+export const validateRefreshToken = async (token: string): Promise<UserPublic | null> => {
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  const result = await query(
+    `SELECT rt.user_id, rt.expires_at, rt.revoked_at,
+            u.id, u.email, u.email_verified, u.role, u.is_banned, u.created_at
+     FROM refresh_tokens rt
+     JOIN users u ON u.id = rt.user_id
+     WHERE rt.token_hash = $1`,
+    [tokenHash]
+  );
+
+  if (result.rows.length === 0) return null;
+
+  const row = result.rows[0];
+
+  // Check if revoked
+  if (row.revoked_at) return null;
+
+  // Check if expired
+  if (new Date(row.expires_at) < new Date()) return null;
+
+  // Check if user is banned
+  if (row.is_banned) return null;
+
+  return {
+    id: row.user_id,
+    email: row.email,
+    email_verified: row.email_verified,
+    role: row.role,
+    created_at: row.created_at,
+  };
+};
+
+// Revoke a specific refresh token
+export const revokeRefreshToken = async (token: string): Promise<void> => {
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  await query(
+    `UPDATE refresh_tokens SET revoked_at = NOW() WHERE token_hash = $1`,
+    [tokenHash]
+  );
+};
+
+// Revoke all refresh tokens for a user (e.g., on password change, account deletion)
+export const revokeAllRefreshTokens = async (userId: string): Promise<void> => {
+  await query(
+    `UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`,
+    [userId]
+  );
+};
+
+// Cleanup expired/revoked refresh tokens
+export const cleanupRefreshTokens = async (): Promise<void> => {
+  await query(
+    `DELETE FROM refresh_tokens WHERE expires_at < NOW() OR revoked_at < NOW() - INTERVAL '30 days'`
+  );
 };
 
 export const generateVerificationToken = (): string => {
@@ -217,6 +296,9 @@ export const changePassword = async (
     'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
     [newPasswordHash, userId]
   );
+
+  // Revoke all refresh tokens on password change
+  await revokeAllRefreshTokens(userId);
 
   return { success: true };
 };

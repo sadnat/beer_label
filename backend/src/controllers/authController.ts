@@ -3,6 +3,44 @@ import { validationResult } from 'express-validator';
 import * as authService from '../services/authService';
 import { AuthRequest } from '../middleware/auth';
 
+// Cookie configuration
+const isProduction = process.env.NODE_ENV === 'production';
+
+const ACCESS_TOKEN_COOKIE = 'access_token';
+const REFRESH_TOKEN_COOKIE = 'refresh_token';
+
+const accessTokenCookieOptions = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: 'strict' as const,
+  path: '/api/',
+  maxAge: 15 * 60 * 1000, // 15 minutes
+};
+
+const refreshTokenCookieOptions = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: 'strict' as const,
+  path: '/api/auth/',
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+};
+
+// Helper to set auth cookies
+const setAuthCookies = (
+  res: Response,
+  accessToken: string,
+  refreshToken: string
+) => {
+  res.cookie(ACCESS_TOKEN_COOKIE, accessToken, accessTokenCookieOptions);
+  res.cookie(REFRESH_TOKEN_COOKIE, refreshToken, refreshTokenCookieOptions);
+};
+
+// Helper to clear auth cookies
+const clearAuthCookies = (res: Response) => {
+  res.clearCookie(ACCESS_TOKEN_COOKIE, { path: '/api/' });
+  res.clearCookie(REFRESH_TOKEN_COOKIE, { path: '/api/auth/' });
+};
+
 export const register = async (req: Request, res: Response): Promise<void> => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -27,12 +65,14 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     // Create user
     const { user, verificationSent } = await authService.createUser(email, password);
 
-    // Generate token with role
-    const token = authService.generateToken(user.id, user.email, user.role);
-
     // Response based on whether email verification is required
     if (user.email_verified) {
       // No email verification required (SMTP not configured)
+      // Set auth cookies
+      const accessToken = authService.generateAccessToken(user.id, user.email, user.role);
+      const { token: refreshToken } = await authService.generateRefreshToken(user.id);
+      setAuthCookies(res, accessToken, refreshToken);
+
       res.status(201).json({
         user: {
           id: user.id,
@@ -40,11 +80,10 @@ export const register = async (req: Request, res: Response): Promise<void> => {
           email_verified: user.email_verified,
           role: user.role,
         },
-        token,
         message: 'Compte créé avec succès',
       });
     } else {
-      // Email verification required - DON'T return token
+      // Email verification required - DON'T set cookies
       // Use a generic message to prevent email enumeration
       res.status(201).json({
         message: 'Si cette adresse est disponible, un email de vérification a été envoyé. Veuillez vérifier votre boîte mail.',
@@ -85,8 +124,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     const user = result.user!;
 
-    // Generate token with role
-    const token = authService.generateToken(user.id, user.email, user.role);
+    // Generate tokens and set cookies
+    const accessToken = authService.generateAccessToken(user.id, user.email, user.role);
+    const { token: refreshToken } = await authService.generateRefreshToken(user.id);
+    setAuthCookies(res, accessToken, refreshToken);
 
     res.json({
       user: {
@@ -95,7 +136,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         email_verified: user.email_verified,
         role: user.role,
       },
-      token,
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -123,10 +163,64 @@ export const me = async (req: AuthRequest, res: Response): Promise<void> => {
   }
 };
 
-export const logout = async (_req: Request, res: Response): Promise<void> => {
-  // With JWT, logout is handled client-side by removing the token
-  // This endpoint exists for API consistency
-  res.json({ message: 'Déconnexion réussie' });
+export const logout = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Revoke the refresh token from DB
+    const refreshToken = req.cookies?.[REFRESH_TOKEN_COOKIE];
+    if (refreshToken) {
+      await authService.revokeRefreshToken(refreshToken);
+    }
+
+    // Clear cookies
+    clearAuthCookies(res);
+
+    res.json({ message: 'Déconnexion réussie' });
+  } catch (error) {
+    console.error('Logout error:', error);
+    // Clear cookies even on error
+    clearAuthCookies(res);
+    res.json({ message: 'Déconnexion réussie' });
+  }
+};
+
+// Refresh access token using refresh token cookie
+export const refresh = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const refreshToken = req.cookies?.[REFRESH_TOKEN_COOKIE];
+
+    if (!refreshToken) {
+      res.status(401).json({ error: 'Refresh token manquant' });
+      return;
+    }
+
+    // Validate the refresh token
+    const user = await authService.validateRefreshToken(refreshToken);
+
+    if (!user) {
+      clearAuthCookies(res);
+      res.status(401).json({ error: 'Refresh token invalide ou expiré' });
+      return;
+    }
+
+    // Generate new access token
+    const newAccessToken = authService.generateAccessToken(user.id, user.email, user.role);
+
+    // Set the new access token cookie
+    res.cookie(ACCESS_TOKEN_COOKIE, newAccessToken, accessTokenCookieOptions);
+
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        email_verified: user.email_verified,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error('Refresh error:', error);
+    clearAuthCookies(res);
+    res.status(401).json({ error: 'Erreur lors du rafraîchissement du token' });
+  }
 };
 
 export const verifyEmail = async (req: Request, res: Response): Promise<void> => {
@@ -240,12 +334,18 @@ export const deleteAccount = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
+    // Revoke all refresh tokens before deleting
+    await authService.revokeAllRefreshTokens(req.user.userId);
+
     const deleted = await authService.deleteUser(req.user.userId);
 
     if (!deleted) {
       res.status(404).json({ error: 'Compte non trouvé' });
       return;
     }
+
+    // Clear cookies
+    clearAuthCookies(res);
 
     res.json({ message: 'Compte supprimé avec succès' });
   } catch (error) {
@@ -279,6 +379,11 @@ export const changePassword = async (req: AuthRequest, res: Response): Promise<v
       res.status(400).json({ error: result.error });
       return;
     }
+
+    // Generate new tokens after password change (old refresh tokens are revoked in authService)
+    const accessToken = authService.generateAccessToken(req.user.userId, req.user.email, req.user.role);
+    const { token: refreshToken } = await authService.generateRefreshToken(req.user.userId);
+    setAuthCookies(res, accessToken, refreshToken);
 
     res.json({ message: 'Mot de passe modifié avec succès' });
   } catch (error) {
