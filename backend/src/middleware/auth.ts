@@ -34,7 +34,7 @@ export const authenticateToken = async (
   }
 
   try {
-    const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+    const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] }) as JwtPayload;
 
     // Check if user is banned
     const result = await query(

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import * as adminController from '../controllers/adminController';
 import { authenticateToken, requireAdmin } from '../middleware/auth';
+import { validateUUID } from '../middleware/validateUUID';
 
 const router = Router();
 
@@ -16,11 +17,11 @@ router.get('/stats', adminController.getStats);
 router.get('/users', adminController.getUsers);
 
 // GET /api/admin/users/:id - User details
-router.get('/users/:id', adminController.getUserDetails);
+router.get('/users/:id', validateUUID(), adminController.getUserDetails);
 
 // PUT /api/admin/users/:id/role - Change user role
 router.put(
-  '/users/:id/role',
+  '/users/:id/role', validateUUID(),
   [
     body('role')
       .isIn(['admin', 'user'])
@@ -31,7 +32,7 @@ router.put(
 
 // POST /api/admin/users/:id/ban - Ban user
 router.post(
-  '/users/:id/ban',
+  '/users/:id/ban', validateUUID(),
   [
     body('reason')
       .optional()
@@ -43,14 +44,14 @@ router.post(
 );
 
 // DELETE /api/admin/users/:id/ban - Unban user
-router.delete('/users/:id/ban', adminController.unbanUser);
+router.delete('/users/:id/ban', validateUUID(), adminController.unbanUser);
 
 // DELETE /api/admin/users/:id - Delete user
-router.delete('/users/:id', adminController.deleteUser);
+router.delete('/users/:id', validateUUID(), adminController.deleteUser);
 
 // PUT /api/admin/users/:id/plan - Change user plan
 router.put(
-  '/users/:id/plan',
+  '/users/:id/plan', validateUUID(),
   [
     body('planId')
       .isUUID()
@@ -100,7 +101,7 @@ router.post(
 
 // PUT /api/admin/plans/:id - Update plan
 router.put(
-  '/plans/:id',
+  '/plans/:id', validateUUID(),
   [
     body('name')
       .optional()

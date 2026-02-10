@@ -344,8 +344,13 @@ export const changeUserRole = async (
 
   const { role: oldRole, email } = currentResult.rows[0];
 
+  // Prevent changing the role of an existing admin (protection against privilege escalation/demotion)
+  if (oldRole === 'admin') {
+    return false;
+  }
+
   const result = await query(
-    `UPDATE users SET role = $2, updated_at = NOW() WHERE id = $1 RETURNING id`,
+    `UPDATE users SET role = $2, updated_at = NOW() WHERE id = $1 AND role != 'admin' RETURNING id`,
     [userId, newRole]
   );
 

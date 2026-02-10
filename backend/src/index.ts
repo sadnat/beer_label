@@ -23,8 +23,8 @@ const allowedOrigins = process.env.CORS_ORIGIN
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, server-to-server)
-    if (!origin) return callback(null, true);
+    // Reject requests with no origin header (prevents CORS bypass)
+    if (!origin) return callback(null, false);
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
@@ -35,7 +35,7 @@ app.use(cors({
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // General rate limiter on all API routes
 app.use('/api/', apiLimiter);

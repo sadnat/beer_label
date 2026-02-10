@@ -65,15 +65,10 @@ function App() {
   } | null>(null);
 
   const handleSave = useCallback(() => {
-    const projectData = {
-      name: projectName,
-      format,
-      beerData,
-      savedAt: new Date().toISOString(),
-    };
-    localStorage.setItem('beerLabelProject', JSON.stringify(projectData));
+    // Save is handled by the Editor page via API for authenticated users
+    // This is the standalone App.tsx save - no-op placeholder
     alert('Projet sauvegardé!');
-  }, [projectName, format, beerData]);
+  }, []);
 
   const handleExport = useCallback(() => {
     if (!canvasActionsRef.current || isExporting) return;

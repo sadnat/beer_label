@@ -13,11 +13,11 @@ interface ElementsPanelProps {
 }
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 Mo
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'];
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 function validateImageFile(file: File): string | null {
   if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-    return 'Format non supporté. Utilisez JPEG, PNG, WebP ou SVG.';
+    return 'Format non supporté. Utilisez JPEG, PNG ou WebP.';
   }
   if (file.size > MAX_IMAGE_SIZE) {
     const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
@@ -263,14 +263,14 @@ export const ElementsPanel: React.FC<ElementsPanelProps> = ({
             type="file"
             ref={fileInputRef}
             onChange={(e) => handleImageUpload(e, false)}
-            accept=".jpg,.jpeg,.png,.webp,.svg"
+            accept=".jpg,.jpeg,.png,.webp"
             className="hidden"
           />
           <input
             type="file"
             ref={bgFileInputRef}
             onChange={(e) => handleImageUpload(e, true)}
-            accept=".jpg,.jpeg,.png,.webp,.svg"
+            accept=".jpg,.jpeg,.png,.webp"
             className="hidden"
           />
           {imageError && (

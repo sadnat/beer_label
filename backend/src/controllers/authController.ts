@@ -16,7 +16,11 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     // Check if user already exists
     const existingUser = await authService.findUserByEmail(email);
     if (existingUser) {
-      res.status(409).json({ error: 'Un compte existe déjà avec cet email' });
+      // Return identical response to prevent email enumeration
+      res.status(201).json({
+        message: 'Si cette adresse est disponible, un email de vérification a été envoyé. Veuillez vérifier votre boîte mail.',
+        requiresVerification: true,
+      });
       return;
     }
 
@@ -41,17 +45,9 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       });
     } else {
       // Email verification required - DON'T return token
+      // Use a generic message to prevent email enumeration
       res.status(201).json({
-        user: {
-          id: user.id,
-          email: user.email,
-          email_verified: user.email_verified,
-          role: user.role,
-        },
-        // No token - user must verify email first
-        message: verificationSent
-          ? 'Compte créé. Veuillez vérifier votre email pour activer votre compte.'
-          : 'Compte créé mais l\'envoi de l\'email de vérification a échoué.',
+        message: 'Si cette adresse est disponible, un email de vérification a été envoyé. Veuillez vérifier votre boîte mail.',
         requiresVerification: true,
       });
     }

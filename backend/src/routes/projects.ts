@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import * as projectController from '../controllers/projectController';
 import { authenticateToken } from '../middleware/auth';
+import { validateUUID } from '../middleware/validateUUID';
 
 const router = Router();
 
@@ -12,7 +13,7 @@ router.use(authenticateToken);
 router.get('/', projectController.listProjects);
 
 // GET /api/projects/:id
-router.get('/:id', projectController.getProject);
+router.get('/:id', validateUUID(), projectController.getProject);
 
 // POST /api/projects
 router.post(
@@ -44,7 +45,7 @@ router.post(
 
 // PUT /api/projects/:id
 router.put(
-  '/:id',
+  '/:id', validateUUID(),
   [
     body('name')
       .optional()
@@ -63,9 +64,9 @@ router.put(
 );
 
 // POST /api/projects/:id/duplicate
-router.post('/:id/duplicate', projectController.duplicateProject);
+router.post('/:id/duplicate', validateUUID(), projectController.duplicateProject);
 
 // DELETE /api/projects/:id
-router.delete('/:id', projectController.deleteProject);
+router.delete('/:id', validateUUID(), projectController.deleteProject);
 
 export default router;

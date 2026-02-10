@@ -162,6 +162,19 @@ export const StylePanel: React.FC<StylePanelProps> = ({
     }
   };
 
+  // Check if this is a multiple selection
+  const isMultipleSelection = selectedElement?.id === 'multiple-selection';
+  
+  // Check if multiple selection contains text objects
+  const multipleSelectionHasText = isMultipleSelection && selectedFabricObject instanceof fabric.ActiveSelection
+    ? selectedFabricObject.getObjects().some(obj => obj instanceof fabric.IText || obj instanceof fabric.Text)
+    : false;
+  
+  // Check if multiple selection contains images
+  const multipleSelectionHasImages = isMultipleSelection && selectedFabricObject instanceof fabric.ActiveSelection
+    ? selectedFabricObject.getObjects().some(obj => obj instanceof fabric.FabricImage)
+    : false;
+
   if (!selectedElement && !isImage) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-gray-400">
@@ -176,10 +189,13 @@ export const StylePanel: React.FC<StylePanelProps> = ({
     );
   }
 
-  const isText = selectedElement?.type === 'text';
+  const isText = selectedElement?.type === 'text' || multipleSelectionHasText;
 
   // Get element name for display
   const getElementName = () => {
+    if (isMultipleSelection) {
+      return 'Sélection multiple';
+    }
     if (isImage) {
       const img = selectedFabricObject as fabric.FabricObject & { elementName?: string };
       return img.elementName || 'Image';
@@ -518,7 +534,7 @@ export const StylePanel: React.FC<StylePanelProps> = ({
       )}
 
       {/* Image Controls */}
-      {isImage && (
+      {(isImage || multipleSelectionHasImages) && (
         <>
           {/* Opacity */}
           <section>

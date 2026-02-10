@@ -337,12 +337,13 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     initializedRef.current = true;
 
     // Selection events
-    canvas.on('selection:created', (e) => {
-      setSelectedObject(e.selected?.[0] || null);
+    // Use getActiveObject() to get the ActiveSelection when multiple objects are selected
+    canvas.on('selection:created', () => {
+      setSelectedObject(canvas.getActiveObject() || null);
     });
 
-    canvas.on('selection:updated', (e) => {
-      setSelectedObject(e.selected?.[0] || null);
+    canvas.on('selection:updated', () => {
+      setSelectedObject(canvas.getActiveObject() || null);
     });
 
     canvas.on('selection:cleared', () => {
@@ -786,12 +787,25 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     return img;
   }, [format.width, format.height, scale]);
 
-  // Update selected object style
+  // Update selected object(s) style - supports multiple selection
   const updateSelectedStyle = useCallback((style: Partial<ElementStyle>) => {
     if (!fabricRef.current || !selectedObject) return;
 
-    const updates: Partial<fabric.IText> = {};
+    // Get all objects to update (handles both single selection and ActiveSelection)
+    const objectsToUpdate: fabric.FabricObject[] = [];
+    if (selectedObject instanceof fabric.ActiveSelection) {
+      objectsToUpdate.push(...selectedObject.getObjects());
+    } else {
+      objectsToUpdate.push(selectedObject);
+    }
 
+    // Filter to only text objects for text-specific styles
+    const textObjects = objectsToUpdate.filter(
+      obj => obj instanceof fabric.IText || obj instanceof fabric.Text
+    );
+
+    // Build updates object
+    const updates: Partial<fabric.IText> = {};
     if (style.fontFamily !== undefined) updates.fontFamily = style.fontFamily;
     if (style.fontSize !== undefined) updates.fontSize = style.fontSize * scale;
     if (style.fontWeight !== undefined) updates.fontWeight = style.fontWeight;
@@ -803,30 +817,33 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     if (style.letterSpacing !== undefined) updates.charSpacing = style.letterSpacing * 10;
     if (style.opacity !== undefined) (updates as unknown as { opacity: number }).opacity = style.opacity;
 
-    // Handle shadow separately - setting it directly works better in Fabric.js
-    if (Object.prototype.hasOwnProperty.call(style, 'shadow')) {
-      if (style.shadow) {
-        selectedObject.set('shadow', new fabric.Shadow({
-          color: style.shadow.color,
-          blur: style.shadow.blur,
-          offsetX: style.shadow.offsetX,
-          offsetY: style.shadow.offsetY,
-        }));
-      } else {
-        // Remove shadow by setting to null
-        selectedObject.set('shadow', null);
+    // Apply updates to all text objects
+    textObjects.forEach(obj => {
+      // Handle shadow separately
+      if (Object.prototype.hasOwnProperty.call(style, 'shadow')) {
+        if (style.shadow) {
+          obj.set('shadow', new fabric.Shadow({
+            color: style.shadow.color,
+            blur: style.shadow.blur,
+            offsetX: style.shadow.offsetX,
+            offsetY: style.shadow.offsetY,
+          }));
+        } else {
+          obj.set('shadow', null);
+        }
       }
-    }
 
-    // Apply other updates
-    if (Object.keys(updates).length > 0) {
-      selectedObject.set(updates);
-    }
+      // Apply other updates
+      if (Object.keys(updates).length > 0) {
+        obj.set(updates);
+      }
+    });
+
     fabricRef.current.renderAll();
     saveHistory();
   }, [selectedObject, scale, saveHistory]);
 
-  // Update shape properties
+  // Update shape properties - supports multiple selection
   const updateShapeStyle = useCallback((props: {
     fill?: string;
     stroke?: string;
@@ -837,12 +854,24 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
   }) => {
     if (!fabricRef.current || !selectedObject) return;
 
-    selectedObject.set(props);
+    // Get all objects to update (handles both single selection and ActiveSelection)
+    const objectsToUpdate: fabric.FabricObject[] = [];
+    if (selectedObject instanceof fabric.ActiveSelection) {
+      objectsToUpdate.push(...selectedObject.getObjects());
+    } else {
+      objectsToUpdate.push(selectedObject);
+    }
+
+    // Apply to all selected objects
+    objectsToUpdate.forEach(obj => {
+      obj.set(props);
+    });
+
     fabricRef.current.renderAll();
     saveHistory();
   }, [selectedObject, saveHistory]);
 
-  // Update image style (opacity and filters)
+  // Update image style (opacity and filters) - supports multiple selection
   const updateImageStyle = useCallback((props: {
     opacity?: number;
     brightness?: number;
@@ -854,66 +883,81 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     invert?: boolean;
   }) => {
     if (!fabricRef.current || !selectedObject) return;
-    if (!(selectedObject instanceof fabric.FabricImage)) return;
 
-    const img = selectedObject as fabric.FabricImage;
-
-    // Update opacity
-    if (props.opacity !== undefined) {
-      img.set({ opacity: props.opacity });
+    // Get all objects to update (handles both single selection and ActiveSelection)
+    const objectsToUpdate: fabric.FabricObject[] = [];
+    if (selectedObject instanceof fabric.ActiveSelection) {
+      objectsToUpdate.push(...selectedObject.getObjects());
+    } else {
+      objectsToUpdate.push(selectedObject);
     }
 
-    // Build filters array
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const filters: any[] = [];
+    // Filter to only image objects
+    const imageObjects = objectsToUpdate.filter(
+      obj => obj instanceof fabric.FabricImage
+    ) as fabric.FabricImage[];
 
-    // Get current filter values from image or use defaults
-    const currentFilters = (img as fabric.FabricImage & { filterValues?: Record<string, number | boolean> }).filterValues || {};
+    if (imageObjects.length === 0) return;
 
-    const brightness = props.brightness !== undefined ? props.brightness : (currentFilters.brightness as number ?? 0);
-    const contrast = props.contrast !== undefined ? props.contrast : (currentFilters.contrast as number ?? 0);
-    const saturation = props.saturation !== undefined ? props.saturation : (currentFilters.saturation as number ?? 0);
-    const blur = props.blur !== undefined ? props.blur : (currentFilters.blur as number ?? 0);
-    const grayscale = props.grayscale !== undefined ? props.grayscale : (currentFilters.grayscale as boolean ?? false);
-    const sepia = props.sepia !== undefined ? props.sepia : (currentFilters.sepia as boolean ?? false);
-    const invert = props.invert !== undefined ? props.invert : (currentFilters.invert as boolean ?? false);
+    imageObjects.forEach(img => {
+      // Update opacity
+      if (props.opacity !== undefined) {
+        img.set({ opacity: props.opacity });
+      }
 
-    // Store filter values on image for later retrieval
-    (img as fabric.FabricImage & { filterValues?: Record<string, number | boolean> }).filterValues = {
-      brightness,
-      contrast,
-      saturation,
-      blur,
-      grayscale,
-      sepia,
-      invert,
-    };
+      // Build filters array
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const filters: any[] = [];
 
-    // Add filters based on values
-    if (brightness !== 0) {
-      filters.push(new fabric.filters.Brightness({ brightness }));
-    }
-    if (contrast !== 0) {
-      filters.push(new fabric.filters.Contrast({ contrast }));
-    }
-    if (saturation !== 0) {
-      filters.push(new fabric.filters.Saturation({ saturation }));
-    }
-    if (blur > 0) {
-      filters.push(new fabric.filters.Blur({ blur }));
-    }
-    if (grayscale) {
-      filters.push(new fabric.filters.Grayscale());
-    }
-    if (sepia) {
-      filters.push(new fabric.filters.Sepia());
-    }
-    if (invert) {
-      filters.push(new fabric.filters.Invert());
-    }
+      // Get current filter values from image or use defaults
+      const currentFilters = (img as fabric.FabricImage & { filterValues?: Record<string, number | boolean> }).filterValues || {};
 
-    img.filters = filters;
-    img.applyFilters();
+      const brightness = props.brightness !== undefined ? props.brightness : (currentFilters.brightness as number ?? 0);
+      const contrast = props.contrast !== undefined ? props.contrast : (currentFilters.contrast as number ?? 0);
+      const saturation = props.saturation !== undefined ? props.saturation : (currentFilters.saturation as number ?? 0);
+      const blur = props.blur !== undefined ? props.blur : (currentFilters.blur as number ?? 0);
+      const grayscale = props.grayscale !== undefined ? props.grayscale : (currentFilters.grayscale as boolean ?? false);
+      const sepia = props.sepia !== undefined ? props.sepia : (currentFilters.sepia as boolean ?? false);
+      const invert = props.invert !== undefined ? props.invert : (currentFilters.invert as boolean ?? false);
+
+      // Store filter values on image for later retrieval
+      (img as fabric.FabricImage & { filterValues?: Record<string, number | boolean> }).filterValues = {
+        brightness,
+        contrast,
+        saturation,
+        blur,
+        grayscale,
+        sepia,
+        invert,
+      };
+
+      // Add filters based on values
+      if (brightness !== 0) {
+        filters.push(new fabric.filters.Brightness({ brightness }));
+      }
+      if (contrast !== 0) {
+        filters.push(new fabric.filters.Contrast({ contrast }));
+      }
+      if (saturation !== 0) {
+        filters.push(new fabric.filters.Saturation({ saturation }));
+      }
+      if (blur > 0) {
+        filters.push(new fabric.filters.Blur({ blur }));
+      }
+      if (grayscale) {
+        filters.push(new fabric.filters.Grayscale());
+      }
+      if (sepia) {
+        filters.push(new fabric.filters.Sepia());
+      }
+      if (invert) {
+        filters.push(new fabric.filters.Invert());
+      }
+
+      img.filters = filters;
+      img.applyFilters();
+    });
+
     fabricRef.current.renderAll();
     saveHistory();
   }, [selectedObject, saveHistory]);
@@ -1024,6 +1068,26 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     fabricRef.current.renderAll();
   }, []);
 
+  // Allowlist of valid Fabric.js object types for canvas JSON validation
+  const ALLOWED_OBJECT_TYPES = new Set([
+    'Rect', 'Circle', 'IText', 'Text', 'FabricText', 'Line', 'Path',
+    'FabricImage', 'Image', 'Group', 'Ellipse', 'Triangle', 'Polygon',
+    'Polyline', 'ActiveSelection',
+  ]);
+
+  // Validate and filter canvas JSON objects to only allow known types
+  const validateCanvasJSON = useCallback((data: { objects?: Array<{ type?: string }> }) => {
+    if (!data.objects || !Array.isArray(data.objects)) return data;
+    data.objects = data.objects.filter((obj) => {
+      if (!obj.type || !ALLOWED_OBJECT_TYPES.has(obj.type)) {
+        console.warn(`[validateCanvasJSON] Rejected unknown object type: ${obj.type}`);
+        return false;
+      }
+      return true;
+    });
+    return data;
+  }, []);
+
   // Helper function to preload fonts used in a canvas JSON
   const preloadFonts = useCallback(async (data: { objects?: Array<{ fontFamily?: string }> }) => {
     if (!data.objects) return;
@@ -1074,8 +1138,11 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     const offsetX = (canvasWidth - scaledTemplateWidth) / 2;
     const offsetY = (canvasHeight - scaledTemplateHeight) / 2;
 
-    // Parse and transform JSON
+    // Parse, validate, and transform JSON
     const data = JSON.parse(json);
+    
+    // Validate object types against allowlist
+    validateCanvasJSON(data);
     
     // Preload all fonts used in the template BEFORE loading into canvas
     await preloadFonts(data);
@@ -1157,19 +1224,23 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     
     saveHistory();
     notifyObjectsChange();
-  }, [saveHistory, notifyObjectsChange, preloadFonts]);
+  }, [saveHistory, notifyObjectsChange, preloadFonts, validateCanvasJSON]);
 
   // Load from JSON without scaling (for saved projects)
   const loadFromJSONRaw = useCallback(async (json: string) => {
     if (!fabricRef.current) return;
 
-    // Parse JSON to preload fonts
+    // Parse JSON to validate and preload fonts
     const data = JSON.parse(json);
+    
+    // Validate object types against allowlist
+    validateCanvasJSON(data);
     
     // Preload all fonts used in the saved project BEFORE loading into canvas
     await preloadFonts(data);
     
-    await fabricRef.current.loadFromJSON(json);
+    // Re-serialize after validation (filtered objects)
+    await fabricRef.current.loadFromJSON(JSON.stringify(data));
     fabricRef.current.discardActiveObject();
     
     // Force re-render of all text objects to ensure correct font display and dimensions
@@ -1190,7 +1261,7 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     
     saveHistory();
     notifyObjectsChange();
-  }, [saveHistory, notifyObjectsChange, preloadFonts]);
+  }, [saveHistory, notifyObjectsChange, preloadFonts, validateCanvasJSON]);
 
   // Export to JSON
   const toJSON = useCallback(() => {
@@ -1250,6 +1321,46 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
 
 // Helper to convert Fabric object to LabelElement
 function fabricObjectToElement(obj: fabric.FabricObject): LabelElement {
+  // Handle multiple selection (ActiveSelection)
+  if (obj instanceof fabric.ActiveSelection) {
+    const objects = obj.getObjects();
+    const textObjects = objects.filter(o => o instanceof fabric.IText || o instanceof fabric.Text);
+    const hasText = textObjects.length > 0;
+    
+    // For multiple selection, return a summary element
+    // Use the first text object's style as reference if available
+    const firstText = textObjects[0] as fabric.IText | undefined;
+    
+    return {
+      id: 'multiple-selection',
+      type: hasText ? 'text' : 'image',
+      fieldType: 'custom',
+      x: obj.left || 0,
+      y: obj.top || 0,
+      width: obj.width,
+      height: obj.height,
+      rotation: obj.angle || 0,
+      content: `${objects.length} éléments sélectionnés`,
+      style: hasText && firstText ? {
+        fontFamily: firstText.fontFamily || 'Roboto',
+        fontSize: firstText.fontSize || 14,
+        fontWeight: firstText.fontWeight === 'bold' ? 'bold' : 'normal',
+        fontStyle: firstText.fontStyle === 'italic' ? 'italic' : 'normal',
+        textDecoration: firstText.underline ? 'underline' : 'none',
+        color: String(firstText.fill || '#000000'),
+        textAlign: (firstText.textAlign || 'left') as 'left' | 'center' | 'right',
+        lineHeight: firstText.lineHeight || 1.2,
+        letterSpacing: (firstText.charSpacing || 0) / 10,
+        shadow: firstText.shadow ? {
+          color: (firstText.shadow as fabric.Shadow).color || 'rgba(0,0,0,0.5)',
+          blur: (firstText.shadow as fabric.Shadow).blur || 0,
+          offsetX: (firstText.shadow as fabric.Shadow).offsetX || 0,
+          offsetY: (firstText.shadow as fabric.Shadow).offsetY || 0,
+        } : undefined,
+      } : DEFAULT_ELEMENT_STYLE,
+    };
+  }
+
   const isText = obj instanceof fabric.IText || obj instanceof fabric.Text;
 
   return {

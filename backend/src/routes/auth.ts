@@ -25,8 +25,14 @@ router.post(
       .withMessage('Veuillez fournir un email valide')
       .normalizeEmail(normalizeEmailOptions),
     body('password')
-      .isLength({ min: 8 })
-      .withMessage('Le mot de passe doit contenir au moins 8 caractères'),
+      .isLength({ min: 10 })
+      .withMessage('Le mot de passe doit contenir au moins 10 caractères')
+      .matches(/[A-Z]/)
+      .withMessage('Le mot de passe doit contenir au moins une majuscule')
+      .matches(/[0-9]/)
+      .withMessage('Le mot de passe doit contenir au moins un chiffre')
+      .matches(/[^A-Za-z0-9]/)
+      .withMessage('Le mot de passe doit contenir au moins un caractère spécial'),
   ],
   authController.register
 );
@@ -65,8 +71,14 @@ router.put(
       .notEmpty()
       .withMessage('Le mot de passe actuel est requis'),
     body('newPassword')
-      .isLength({ min: 8 })
-      .withMessage('Le nouveau mot de passe doit contenir au moins 8 caractères'),
+      .isLength({ min: 10 })
+      .withMessage('Le nouveau mot de passe doit contenir au moins 10 caractères')
+      .matches(/[A-Z]/)
+      .withMessage('Le nouveau mot de passe doit contenir au moins une majuscule')
+      .matches(/[0-9]/)
+      .withMessage('Le nouveau mot de passe doit contenir au moins un chiffre')
+      .matches(/[^A-Za-z0-9]/)
+      .withMessage('Le nouveau mot de passe doit contenir au moins un caractère spécial'),
   ],
   authController.changePassword
 );
@@ -85,8 +97,14 @@ router.post(
   '/reset-password',
   [
     body('password')
-      .isLength({ min: 8 })
-      .withMessage('Le mot de passe doit contenir au moins 8 caractères'),
+      .isLength({ min: 10 })
+      .withMessage('Le mot de passe doit contenir au moins 10 caractères')
+      .matches(/[A-Z]/)
+      .withMessage('Le mot de passe doit contenir au moins une majuscule')
+      .matches(/[0-9]/)
+      .withMessage('Le mot de passe doit contenir au moins un chiffre')
+      .matches(/[^A-Za-z0-9]/)
+      .withMessage('Le mot de passe doit contenir au moins un caractère spécial'),
   ],
   authController.resetPassword
 );
