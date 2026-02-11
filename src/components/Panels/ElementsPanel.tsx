@@ -9,7 +9,6 @@ interface ElementsPanelProps {
   onAddRectangle?: (color: string, strokeColor: string) => void;
   onAddCircle?: (color: string, strokeColor: string) => void;
   onAddLine?: (color: string) => void;
-  onAddCurvedText?: (text: string, radius: number, curve: number, flip: boolean) => void;
 }
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 Mo
@@ -34,13 +33,8 @@ export const ElementsPanel: React.FC<ElementsPanelProps> = ({
   onAddRectangle,
   onAddCircle,
   onAddLine,
-  onAddCurvedText,
 }) => {
   const [customText, setCustomText] = useState('');
-  const [curvedText, setCurvedText] = useState('');
-  const [curvedRadius, setCurvedRadius] = useState(150);
-  const [curvedAngle, setCurvedAngle] = useState(180);
-  const [curvedFlip, setCurvedFlip] = useState(false);
   const [shapeColor, setShapeColor] = useState('#d4af37');
   const [strokeColor, setStrokeColor] = useState('#000000');
   const [imageError, setImageError] = useState<string | null>(null);
@@ -189,66 +183,6 @@ export const ElementsPanel: React.FC<ElementsPanelProps> = ({
             className="px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-md transition-colors"
           >
             +
-          </button>
-        </div>
-      </section>
-
-      {/* Curved Text Section */}
-      <section>
-        <h3 className="text-sm font-semibold text-amber-400 mb-3 uppercase tracking-wide">
-          Texte Courbé
-        </h3>
-        <div className="space-y-3">
-          <input
-            type="text"
-            value={curvedText}
-            onChange={(e) => setCurvedText(e.target.value)}
-            placeholder="Texte en arc..."
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
-          <div className="flex items-center gap-3">
-            <label className="text-xs text-gray-400 w-14">Rayon</label>
-            <input
-              type="range"
-              min="50"
-              max="400"
-              value={curvedRadius}
-              onChange={(e) => setCurvedRadius(Number(e.target.value))}
-              className="flex-1 accent-amber-500"
-            />
-            <span className="text-xs text-gray-300 w-8 text-right">{curvedRadius}</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <label className="text-xs text-gray-400 w-14">Angle</label>
-            <input
-              type="range"
-              min="30"
-              max="360"
-              value={curvedAngle}
-              onChange={(e) => setCurvedAngle(Number(e.target.value))}
-              className="flex-1 accent-amber-500"
-            />
-            <span className="text-xs text-gray-300 w-8 text-right">{curvedAngle}°</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <label className="text-xs text-gray-400">Inverser la courbe</label>
-            <button
-              onClick={() => setCurvedFlip(!curvedFlip)}
-              className={`w-10 h-5 rounded-full transition-colors ${curvedFlip ? 'bg-amber-500' : 'bg-gray-600'}`}
-            >
-              <div className={`w-4 h-4 bg-white rounded-full transition-transform ${curvedFlip ? 'translate-x-5' : 'translate-x-0.5'}`} />
-            </button>
-          </div>
-          <button
-            onClick={() => {
-              if (curvedText && onAddCurvedText) {
-                onAddCurvedText(curvedText, curvedRadius, curvedAngle, curvedFlip);
-              }
-            }}
-            disabled={!curvedText}
-            className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-md transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed"
-          >
-            Ajouter le texte courbé
           </button>
         </div>
       </section>

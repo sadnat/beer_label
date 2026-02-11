@@ -25,11 +25,19 @@ const DEFAULT_IMAGE_VALUES: ImageStyleProps = {
   invert: false,
 };
 
+interface CurveOptions {
+  enabled: boolean;
+  radius?: number;
+  curve?: number;
+  flip?: boolean;
+}
+
 interface StylePanelProps {
   selectedElement: LabelElement | null;
   selectedFabricObject?: fabric.FabricObject | null;
   onStyleChange: (style: Partial<ElementStyle>) => void;
   onImageStyleChange?: (props: ImageStyleProps) => void;
+  onCurveChange?: (options: CurveOptions) => void;
   onDeleteElement: () => void;
 }
 
@@ -38,6 +46,7 @@ export const StylePanel: React.FC<StylePanelProps> = ({
   selectedFabricObject,
   onStyleChange,
   onImageStyleChange,
+  onCurveChange,
   onDeleteElement,
 }) => {
   // Check if selected object is an image
@@ -67,6 +76,12 @@ export const StylePanel: React.FC<StylePanelProps> = ({
     offsetX: 2,
     offsetY: 2,
   });
+
+  // Local state for curve values
+  const [curveEnabled, setCurveEnabled] = useState(false);
+  const [curveRadius, setCurveRadius] = useState(150);
+  const [curveAngle, setCurveAngle] = useState(180);
+  const [curveFlip, setCurveFlip] = useState(false);
 
   // Track previous element ID to only sync when selection changes
   const prevElementIdRef = useRef<string | null>(null);
@@ -99,6 +114,19 @@ export const StylePanel: React.FC<StylePanelProps> = ({
       } else {
         setShadowEnabled(false);
         setShadowValues({ color: '#000000', blur: 4, offsetX: 2, offsetY: 2 });
+      }
+
+      // Sync curve
+      if (selectedElement?.curveEnabled) {
+        setCurveEnabled(true);
+        setCurveRadius(selectedElement.curveRadius ?? 150);
+        setCurveAngle(selectedElement.curveAngle ?? 180);
+        setCurveFlip(selectedElement.curveFlip ?? false);
+      } else {
+        setCurveEnabled(false);
+        setCurveRadius(150);
+        setCurveAngle(180);
+        setCurveFlip(false);
       }
     }
   }, [selectedElement]);
@@ -150,6 +178,34 @@ export const StylePanel: React.FC<StylePanelProps> = ({
     } else {
       setShadowEnabled(true);
       onStyleChange({ shadow: shadowValues });
+    }
+  };
+
+  // Handle curve change - update local state and call parent handler
+  const handleCurveToggle = () => {
+    const newEnabled = !curveEnabled;
+    setCurveEnabled(newEnabled);
+    if (onCurveChange) {
+      onCurveChange({
+        enabled: newEnabled,
+        radius: curveRadius,
+        curve: curveAngle,
+        flip: curveFlip,
+      });
+    }
+  };
+
+  const handleCurveParamChange = (updates: { radius?: number; curve?: number; flip?: boolean }) => {
+    if (updates.radius !== undefined) setCurveRadius(updates.radius);
+    if (updates.curve !== undefined) setCurveAngle(updates.curve);
+    if (updates.flip !== undefined) setCurveFlip(updates.flip);
+    if (onCurveChange) {
+      onCurveChange({
+        enabled: true,
+        radius: updates.radius ?? curveRadius,
+        curve: updates.curve ?? curveAngle,
+        flip: updates.flip ?? curveFlip,
+      });
     }
   };
 
@@ -530,6 +586,90 @@ export const StylePanel: React.FC<StylePanelProps> = ({
               )}
             </div>
           </section>
+
+          {/* Curve - only for single text selection */}
+          {!isMultipleSelection && (
+            <section>
+              <h3 className="text-sm font-semibold text-amber-400 mb-3 uppercase tracking-wide">
+                Courbe
+              </h3>
+              <div className="space-y-3">
+                {/* Toggle curve */}
+                <div className="flex items-center justify-between">
+                  <label className="text-sm text-gray-300">Activer la courbe</label>
+                  <button
+                    onClick={handleCurveToggle}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      curveEnabled ? 'bg-amber-600' : 'bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        curveEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {curveEnabled && (
+                  <>
+                    {/* Radius */}
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Rayon</label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          value={curveRadius}
+                          onChange={(e) => handleCurveParamChange({ radius: parseInt(e.target.value) })}
+                          min={50}
+                          max={400}
+                          className="flex-1 accent-amber-500"
+                        />
+                        <span className="w-12 text-center text-sm text-gray-300">
+                          {curveRadius}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Angle */}
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Angle</label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          value={curveAngle}
+                          onChange={(e) => handleCurveParamChange({ curve: parseInt(e.target.value) })}
+                          min={30}
+                          max={360}
+                          className="flex-1 accent-amber-500"
+                        />
+                        <span className="w-12 text-center text-sm text-gray-300">
+                          {curveAngle}°
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Flip */}
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm text-gray-300">Inverser la courbe</label>
+                      <button
+                        onClick={() => handleCurveParamChange({ flip: !curveFlip })}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          curveFlip ? 'bg-amber-600' : 'bg-gray-600'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            curveFlip ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </section>
+          )}
         </>
       )}
 

@@ -63,7 +63,7 @@ export function EditorPage() {
     addRectangle: (color: string, strokeColor: string) => void;
     addCircle: (color: string, strokeColor: string) => void;
     addLine: (color: string) => void;
-    addCurvedText: (text: string, radius: number, curve: number, flip: boolean) => void;
+    updateCurve: (options: { enabled: boolean; radius?: number; curve?: number; flip?: boolean }) => void;
     updateStyle: (style: Partial<ElementStyle>) => void;
     updateImageStyle: (props: ImageStyleProps) => void;
     deleteSelected: () => void;
@@ -347,9 +347,9 @@ export function EditorPage() {
     }
   }, [markUnsaved]);
 
-  const handleAddCurvedText = useCallback((text: string, radius: number, curve: number, flip: boolean) => {
+  const handleCurveChange = useCallback((options: { enabled: boolean; radius?: number; curve?: number; flip?: boolean }) => {
     if (canvasActionsRef.current) {
-      canvasActionsRef.current.addCurvedText(text, radius, curve, flip);
+      canvasActionsRef.current.updateCurve(options);
       markUnsaved();
     }
   }, [markUnsaved]);
@@ -519,7 +519,6 @@ export function EditorPage() {
               onAddRectangle={handleAddRectangle}
               onAddCircle={handleAddCircle}
               onAddLine={handleAddLine}
-              onAddCurvedText={handleAddCurvedText}
             />
           </div>
           <div data-tab="layers">
@@ -547,6 +546,7 @@ export function EditorPage() {
               selectedFabricObject={selectedFabricObject}
               onStyleChange={handleStyleChange}
               onImageStyleChange={handleImageStyleChange}
+              onCurveChange={handleCurveChange}
               onDeleteElement={handleDeleteSelected}
             />
           </div>

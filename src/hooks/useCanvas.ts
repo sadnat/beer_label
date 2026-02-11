@@ -38,6 +38,9 @@ const PROPERTIES_TO_INCLUDE = [
   'isGrid',
   'isGuide',
   'excludeFromExport',
+  'curveRadius',
+  'curveAngle',
+  'curveFlip',
 ];
 
 export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }: UseCanvasOptions) {
@@ -602,67 +605,75 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     return text;
   }, [format.width, format.height, scale]);
 
-  // Add curved text along an arc path
-  const addCurvedText = useCallback((
-    content: string,
-    radius: number = 150,
-    curve: number = 180,
-    flip: boolean = false
-  ) => {
-    if (!fabricRef.current) return;
+  // Update curve on selected text object (apply/modify/remove text-on-path)
+  const updateCurve = useCallback((options: {
+    enabled: boolean;
+    radius?: number;
+    curve?: number;
+    flip?: boolean;
+  }) => {
+    if (!fabricRef.current || !selectedObject) return;
 
-    const centerX = mmToPx(format.width / 2, scale);
-    const centerY = mmToPx(format.height / 2, scale);
-    const r = radius * scale;
+    // Only works on text objects
+    const isText = selectedObject instanceof fabric.IText || selectedObject instanceof fabric.Text;
+    if (!isText) return;
 
-    // Build an SVG arc path
-    const startAngle = (180 - curve) / 2;
-    const endAngle = startAngle + curve;
-    const startRad = (startAngle * Math.PI) / 180;
-    const endRad = (endAngle * Math.PI) / 180;
+    const obj = selectedObject as fabric.IText & {
+      curveRadius?: number;
+      curveAngle?: number;
+      curveFlip?: boolean;
+    };
 
-    const x1 = r * Math.cos(startRad);
-    const y1 = -r * Math.sin(startRad);
-    const x2 = r * Math.cos(endRad);
-    const y2 = -r * Math.sin(endRad);
+    if (!options.enabled) {
+      // Remove curve
+      obj.set('path' as keyof fabric.IText, undefined);
+      obj.curveRadius = undefined;
+      obj.curveAngle = undefined;
+      obj.curveFlip = undefined;
+    } else {
+      // Apply/update curve
+      const radius = options.radius ?? obj.curveRadius ?? 150;
+      const curve = options.curve ?? obj.curveAngle ?? 180;
+      const flip = options.flip ?? obj.curveFlip ?? false;
+      const r = radius * scale;
 
-    const largeArc = curve > 180 ? 1 : 0;
-    const sweepFlag = flip ? 0 : 1;
-    const pathStr = flip
-      ? `M ${x2} ${y2} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${x1} ${y1}`
-      : `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${x2} ${y2}`;
+      // Build an SVG arc path (same algorithm as the old addCurvedText)
+      const startAngle = (180 - curve) / 2;
+      const endAngle = startAngle + curve;
+      const startRad = (startAngle * Math.PI) / 180;
+      const endRad = (endAngle * Math.PI) / 180;
 
-    const path = new fabric.Path(pathStr, {
-      fill: '',
-      stroke: '',
-      visible: false,
-    });
+      const x1 = r * Math.cos(startRad);
+      const y1 = -r * Math.sin(startRad);
+      const x2 = r * Math.cos(endRad);
+      const y2 = -r * Math.sin(endRad);
 
-    const text = new fabric.FabricText(content, {
-      left: centerX,
-      top: centerY,
-      fontFamily: 'Playfair Display',
-      fontSize: 24 * scale,
-      fontWeight: 'bold',
-      fill: '#000000',
-      textAlign: 'center',
-      originX: 'center',
-      originY: 'center',
-      path: path,
-    });
+      const largeArc = curve > 180 ? 1 : 0;
+      const sweepFlag = flip ? 0 : 1;
+      const pathStr = flip
+        ? `M ${x2} ${y2} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${x1} ${y1}`
+        : `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${x2} ${y2}`;
 
-    (text as fabric.FabricObject & { elementName?: string }).elementName = 'Texte courbé';
-    (text as fabric.FabricObject & { curvedText?: boolean }).curvedText = true;
+      const path = new fabric.Path(pathStr, {
+        fill: '',
+        stroke: '',
+        visible: false,
+      });
 
-    fabricRef.current.add(text);
-    fabricRef.current.setActiveObject(text);
+      obj.set('path' as keyof fabric.IText, path);
+      obj.curveRadius = radius;
+      obj.curveAngle = curve;
+      obj.curveFlip = flip;
+    }
+
+    // Force recalculation
+    obj.dirty = true;
+    obj._clearCache();
+    obj.initDimensions();
+    obj.setCoords();
     fabricRef.current.renderAll();
-
     saveHistory();
-    notifyObjectsChange();
-
-    return text;
-  }, [format.width, format.height, scale, saveHistory, notifyObjectsChange]);
+  }, [selectedObject, scale, saveHistory]);
 
   // Add rectangle
   const addRectangle = useCallback((color: string = '#d4af37', strokeColor: string = '#000000') => {
@@ -1290,7 +1301,7 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
     distributeObjects,
     // Canvas actions
     addText,
-    addCurvedText,
+    updateCurve,
     addRectangle,
     addCircle,
     addLine,
@@ -1363,6 +1374,14 @@ function fabricObjectToElement(obj: fabric.FabricObject): LabelElement {
 
   const isText = obj instanceof fabric.IText || obj instanceof fabric.Text;
 
+  // Extract curve properties from custom properties on the fabric object
+  const curveObj = obj as fabric.FabricObject & {
+    curveRadius?: number;
+    curveAngle?: number;
+    curveFlip?: boolean;
+  };
+  const hasCurve = curveObj.curveRadius !== undefined && curveObj.curveRadius !== null;
+
   return {
     id: (obj as { id?: string }).id || Math.random().toString(36).substr(2, 9),
     type: isText ? 'text' : 'image',
@@ -1373,6 +1392,10 @@ function fabricObjectToElement(obj: fabric.FabricObject): LabelElement {
     height: obj.height,
     rotation: obj.angle || 0,
     content: isText ? (obj as fabric.IText).text || '' : '',
+    curveEnabled: hasCurve,
+    curveRadius: curveObj.curveRadius,
+    curveAngle: curveObj.curveAngle,
+    curveFlip: curveObj.curveFlip,
     style: isText ? {
       fontFamily: (obj as fabric.IText).fontFamily || 'Roboto',
       fontSize: ((obj as fabric.IText).fontSize || 14),

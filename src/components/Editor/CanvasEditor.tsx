@@ -14,7 +14,7 @@ interface CanvasEditorProps {
     addRectangle: (color: string, strokeColor: string) => void;
     addCircle: (color: string, strokeColor: string) => void;
     addLine: (color: string) => void;
-    addCurvedText: (text: string, radius: number, curve: number, flip: boolean) => void;
+    updateCurve: (options: { enabled: boolean; radius?: number; curve?: number; flip?: boolean }) => void;
     updateStyle: (style: Partial<ElementStyle>) => void;
     updateImageStyle: (props: {
       opacity?: number;
@@ -103,7 +103,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
     addRectangle,
     addCircle,
     addLine,
-    addCurvedText,
+    updateCurve,
     addImage,
     updateSelectedStyle,
     updateImageStyle,
@@ -172,7 +172,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
       addRectangle,
       addCircle,
       addLine,
-      addCurvedText,
+      updateCurve,
       updateStyle: updateSelectedStyle,
       updateImageStyle,
       deleteSelected,
@@ -191,7 +191,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
       loadFromJSONRaw,
       clearCanvas,
     };
-  }, [addText, addImage, addRectangle, addCircle, addLine, addCurvedText, updateSelectedStyle, updateImageStyle, deleteSelected, duplicateSelected, undo, redo, bringForward, sendBackward, bringToFront, sendToBack, selectObject, getObjects, toDataURL, toJSON, loadFromJSON, loadFromJSONRaw, clearCanvas, actionsRef]);
+  }, [addText, addImage, addRectangle, addCircle, addLine, updateCurve, updateSelectedStyle, updateImageStyle, deleteSelected, duplicateSelected, undo, redo, bringForward, sendBackward, bringToFront, sendToBack, selectObject, getObjects, toDataURL, toJSON, loadFromJSON, loadFromJSONRaw, clearCanvas, actionsRef]);
 
   // Keyboard shortcuts
   useEffect(() => {

@@ -44,7 +44,7 @@ function App() {
     addRectangle: (color: string, strokeColor: string) => void;
     addCircle: (color: string, strokeColor: string) => void;
     addLine: (color: string) => void;
-    addCurvedText: (content: string, radius: number, curve: number, flip: boolean) => void;
+    updateCurve: (options: { enabled: boolean; radius?: number; curve?: number; flip?: boolean }) => void;
     updateStyle: (style: Partial<ElementStyle>) => void;
     updateImageStyle: (props: ImageStyleProps) => void;
     deleteSelected: () => void;

@@ -17,6 +17,11 @@ export interface LabelElement {
   rotation: number;
   content: string;
   style: ElementStyle;
+  // Curve properties for text-on-path
+  curveEnabled?: boolean;
+  curveRadius?: number;
+  curveAngle?: number;
+  curveFlip?: boolean;
 }
 
 export interface ElementStyle {
