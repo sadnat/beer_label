@@ -649,10 +649,11 @@ export function useCanvas({ format, scale, onSelectionChange, onObjectsChange }:
       const y2 = -r * Math.sin(endRad);
 
       const largeArc = curve > 180 ? 1 : 0;
-      const sweepFlag = flip ? 0 : 1;
+      // Default (flip=false): upward arc (text readable), flip=true: downward arc (inverted)
+      const sweepFlag = flip ? 1 : 0;
       const pathStr = flip
-        ? `M ${x2} ${y2} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${x1} ${y1}`
-        : `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${x2} ${y2}`;
+        ? `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${x2} ${y2}`
+        : `M ${x2} ${y2} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${x1} ${y1}`;
 
       const path = new fabric.Path(pathStr, {
         fill: '',
